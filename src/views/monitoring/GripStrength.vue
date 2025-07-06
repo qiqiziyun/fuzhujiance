@@ -178,34 +178,7 @@
       </div>
     </div>
     
-    <!-- 统计信息 -->
-    <div class="statistics">
-      <h2>统计信息</h2>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <div class="stat-label">测量次数</div>
-          <div class="stat-value">{{ statistics.measureCount }}</div>
-          <div class="stat-desc">今日</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">握力范围</div>
-          <div class="stat-value">{{ statistics.range.min ? statistics.range.min.toFixed(1) : '0.0' }} - {{ statistics.range.max ? statistics.range.max.toFixed(1) : '0.0' }}</div>
-          <div class="stat-desc">kg</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">标准差</div>
-          <div class="stat-value">{{ statistics.standardDeviation ? statistics.standardDeviation.toFixed(2) : '0.00' }}</div>
-          <div class="stat-desc">kg</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">稳定性</div>
-          <div class="stat-value" :class="getStabilityClass(statistics.stability)">
-            {{ getStabilityText(statistics.stability) }}
-          </div>
-          <div class="stat-desc">评估</div>
-        </div>
-      </div>
-    </div>
+    <!-- 统计信息部分已删除 -->
   </div>
 </template>
 
