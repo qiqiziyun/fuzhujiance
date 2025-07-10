@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 
 // 创建axios实例
 const request = axios.create({
-  baseURL: '/api', // 基础URL
+  baseURL: 'http://localhost:8080', // 基础URL，指向Spring Boot后端
   timeout: 10000, // 请求超时时间
   headers: {
     'Content-Type': 'application/json'

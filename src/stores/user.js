@@ -5,16 +5,31 @@ import { login, register, updateProfile, updateAvatar, resetPassword } from '@/a
 export const useUserStore = defineStore('user', () => {
   // 状态
   const user = ref(null)
-  const token = ref(localStorage.getItem('token') || '')
+  const token = ref('')
+  const isInitialized = ref(false)
   
   // 计算属性
-  const isLoggedIn = computed(() => !!token.value && !!user.value)
+  const isLoggedIn = computed(() => {
+    return !!token.value && !!user.value && isInitialized.value
+  })
   
   // 初始化用户信息
   const initUser = () => {
-    const savedUser = localStorage.getItem('user')
-    if (savedUser && token.value) {
-      user.value = JSON.parse(savedUser)
+    try {
+      const savedToken = localStorage.getItem('token')
+      const savedUser = localStorage.getItem('user')
+      
+      if (savedToken && savedUser) {
+        token.value = savedToken
+        user.value = JSON.parse(savedUser)
+      }
+    } catch (error) {
+      console.error('初始化用户信息失败:', error)
+      // 清除可能损坏的数据
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    } finally {
+      isInitialized.value = true
     }
   }
   
@@ -22,15 +37,23 @@ export const useUserStore = defineStore('user', () => {
   const loginUser = async (credentials) => {
     try {
       const response = await login(credentials)
+      
+      // 确保响应数据完整
+      if (!response.user || !response.token) {
+        throw new Error('登录响应数据不完整')
+      }
+      
       user.value = response.user
       token.value = response.token
       
+      // 同步保存到localStorage
       localStorage.setItem('user', JSON.stringify(response.user))
       localStorage.setItem('token', response.token)
       
       return { success: true }
     } catch (error) {
-      return { success: false, message: error.message }
+      console.error('登录失败:', error)
+      return { success: false, message: error.message || '登录失败，请重试' }
     }
   }
   
@@ -86,18 +109,20 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('token')
   }
   
-  // 初始化
+  // 立即初始化
   initUser()
   
   return {
     user,
     token,
     isLoggedIn,
+    isInitialized,
     loginUser,
     registerUser,
     updateUserProfile,
     updateUserAvatar,
     resetUserPassword,
-    logout
+    logout,
+    initUser
   }
 })

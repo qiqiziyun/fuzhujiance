@@ -8,8 +8,8 @@
           <div class="speed-status" :class="getSpeedStatus(currentSpeed)"></div>
         </div>
         <div class="speed-display">
-          <div class="speed-value">{{ currentSpeed.toFixed(1) }}</div>
-          <div class="speed-unit">km/h</div>
+          <div class="speed-value">{{ (currentSpeed || 0).toFixed(1) }}</div>
+          <div class="speed-unit">m/s</div>
         </div>
         <div class="speed-info">
           <span class="speed-desc">{{ getSpeedDescription(currentSpeed) }}</span>
@@ -23,15 +23,15 @@
         </div>
         <div class="stats-grid">
           <div class="stat-item">
-            <div class="stat-value">{{ maxSpeed.toFixed(1) }}</div>
+            <div class="stat-value">{{ (maxSpeed || 0).toFixed(1) }}</div>
             <div class="stat-label">最高速度</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">{{ avgSpeed.toFixed(1) }}</div>
+            <div class="stat-value">{{ (avgSpeed || 0).toFixed(1) }}</div>
             <div class="stat-label">平均速度</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">{{ totalDistance.toFixed(2) }}</div>
+            <div class="stat-value">{{ (totalDistance || 0).toFixed(2) }}</div>
             <div class="stat-label">总距离(km)</div>
           </div>
           <div class="stat-item">
@@ -48,75 +48,53 @@
         <h2>速度变化趋势</h2>
         <div class="chart-controls">
           <el-radio-group v-model="chartTimeRange" @change="loadSpeedData">
-            <el-radio-button label="1h">1小时</el-radio-button>
-            <el-radio-button label="6h">6小时</el-radio-button>
-            <el-radio-button label="24h">24小时</el-radio-button>
+            <el-radio-button value="1h">1小时</el-radio-button>
+            <el-radio-button value="6h">6小时</el-radio-button>
+            <el-radio-button value="24h">24小时</el-radio-button>
           </el-radio-group>
         </div>
       </div>
       <div class="chart-container">
-        <!-- 这里可以集成图表库，如ECharts -->
-        <div class="chart-placeholder">
-          <el-icon class="chart-icon"><TrendCharts /></el-icon>
-          <h3>速度趋势图表</h3>
-          <p>显示{{ chartTimeRange }}内的速度变化</p>
-          <div class="chart-data">
-            <div v-for="(point, index) in speedHistory.slice(-10)" :key="index" class="data-point">
-              <div class="point-time">{{ formatTime(point.timestamp) }}</div>
-              <div class="point-speed">{{ point.speed.toFixed(1) }} km/h</div>
-            </div>
-          </div>
-        </div>
+        <v-chart 
+          class="speed-chart" 
+          :option="chartOption" 
+          :loading="chartLoading"
+          autoresize
+        />
       </div>
     </div>
     
-    <!-- 速度历史记录 -->
-    <div class="speed-history-section">
-      <div class="history-header">
-        <h2>速度记录</h2>
-        <el-button type="primary" @click="refreshData">
-          <el-icon><Refresh /></el-icon>
-          刷新数据
-        </el-button>
-      </div>
-      <div class="history-table">
-        <el-table :data="speedHistory" style="width: 100%">
-          <el-table-column prop="timestamp" label="时间" width="180">
-            <template #default="scope">
-              {{ formatDateTime(scope.row.timestamp) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="speed" label="速度 (km/h)" width="120">
-            <template #default="scope">
-              <span :class="getSpeedClass(scope.row.speed)">{{ scope.row.speed.toFixed(1) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="acceleration" label="加速度 (m/s²)" width="140">
-            <template #default="scope">
-              {{ scope.row.acceleration ? scope.row.acceleration.toFixed(2) : '--' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="location" label="位置" show-overflow-tooltip>
-            <template #default="scope">
-              {{ scope.row.location || '未知位置' }}
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="scope">
-              <el-tag :type="getSpeedTagType(scope.row.speed)">{{ getSpeedDescription(scope.row.speed) }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { TrendCharts, Refresh } from '@element-plus/icons-vue'
+import { TrendCharts } from '@element-plus/icons-vue'
 import { getSpeedData } from '@/api/monitoring'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart } from 'echarts/charts'
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  DataZoomComponent
+} from 'echarts/components'
+import VChart from 'vue-echarts'
+
+// 注册ECharts组件
+use([
+  CanvasRenderer,
+  LineChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  DataZoomComponent
+])
 
 // 当前速度
 const currentSpeed = ref(2.3)
@@ -131,33 +109,172 @@ const lastUpdate = ref(Date.now())
 // 图表时间范围
 const chartTimeRange = ref('1h')
 
-// 速度历史数据
-const speedHistory = ref([
-  {
-    id: 1,
-    timestamp: Date.now() - 300000,
-    speed: 2.3,
-    acceleration: 0.1,
-    location: '北京市朝阳区'
-  },
-  {
-    id: 2,
-    timestamp: Date.now() - 600000,
-    speed: 1.8,
-    acceleration: -0.2,
-    location: '北京市朝阳区'
-  },
-  {
-    id: 3,
-    timestamp: Date.now() - 900000,
-    speed: 3.1,
-    acceleration: 0.3,
-    location: '北京市朝阳区'
-  }
-])
+// 速度历史数据（用于图表显示）
+const speedHistory = ref([])
 
 // 定时器
 let updateTimer = null
+
+// 图表加载状态
+const loading = ref(false)
+const chartLoading = ref(false)
+
+// 图表配置
+const chartOption = computed(() => {
+  console.log('speedHistory数据:', speedHistory.value)
+  
+  // 处理历史数据
+  const times = []
+  const speeds = []
+  
+  if (speedHistory.value && speedHistory.value.length > 0) {
+    speedHistory.value.forEach(item => {
+      if (item.timestamp && (item.speed !== undefined || item.velocity !== undefined || item.value !== undefined)) {
+        times.push(formatTime(item.timestamp))
+        const speedValue = item.speed || item.velocity || item.value || 0
+        speeds.push(Number(speedValue))
+      }
+    })
+  }
+  
+  // 计算标签间隔（每5分钟显示一个标签）
+  const labelInterval = Math.max(1, Math.ceil(times.length / 12))
+  console.log('标签间隔设置:', labelInterval)
+  
+  return {
+    tooltip: {
+      trigger: 'axis',
+      formatter: function(params) {
+        const data = params[0]
+        return `时间: ${data.name}<br/>速度: ${data.value} m/s`
+      }
+    },
+    grid: {
+      left: '8%',
+      right: '4%',
+      bottom: '18%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: times,
+      axisLabel: {
+        rotate: 45,
+        fontSize: 14,
+        color: '#303133',
+        margin: 15,
+        fontWeight: 'bold',
+        fontFamily: 'Arial, sans-serif',
+        interval: labelInterval - 1,
+        formatter: function(value, index) {
+          return value || ''
+        }
+      },
+      axisTick: {
+        alignWithLabel: true,
+        show: true,
+        length: 6,
+        lineStyle: {
+          color: '#303133',
+          width: 2
+        }
+      },
+      axisLine: {
+        show: true,
+        lineStyle: {
+          color: '#303133',
+          width: 2
+        }
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: '速度 (m/s)',
+      nameTextStyle: {
+        color: '#303133',
+        fontSize: 14,
+        fontWeight: 'bold',
+        padding: [0, 0, 0, 20]
+      },
+      axisLabel: {
+        formatter: '{value}',
+        fontSize: 14,
+        color: '#303133',
+        margin: 18,
+        fontWeight: 'bold',
+        fontFamily: 'Arial, sans-serif'
+      },
+      axisLine: {
+        show: true,
+        lineStyle: {
+          color: '#303133',
+          width: 2
+        }
+      },
+      axisTick: {
+        show: true,
+        length: 6,
+        lineStyle: {
+          color: '#303133',
+          width: 2
+        }
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#E4E7ED',
+          type: 'dashed',
+          width: 1
+        }
+      }
+    },
+    series: [
+      {
+        name: '速度',
+        type: 'line',
+        data: speeds,
+        smooth: true,
+        lineStyle: {
+          color: '#409EFF',
+          width: 2
+        },
+        itemStyle: {
+          color: '#409EFF'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              {
+                offset: 0,
+                color: 'rgba(64, 158, 255, 0.3)'
+              },
+              {
+                offset: 1,
+                color: 'rgba(64, 158, 255, 0.1)'
+              }
+            ]
+          }
+        }
+      }
+    ],
+    dataZoom: [
+      {
+        type: 'inside',
+        start: 0,
+        end: 100
+      },
+      {
+        start: 0,
+        end: 100,
+        height: 30
+      }
+    ]
+  }
+})
 
 // 获取速度状态
 const getSpeedStatus = (speed) => {
@@ -175,33 +292,32 @@ const getSpeedDescription = (speed) => {
   return '很快'
 }
 
-// 获取速度样式类
-const getSpeedClass = (speed) => {
-  if (speed < 1) return 'speed-slow'
-  if (speed < 3) return 'speed-normal'
-  if (speed < 6) return 'speed-fast'
-  return 'speed-very-fast'
-}
 
-// 获取速度标签类型
-const getSpeedTagType = (speed) => {
-  if (speed < 1) return 'info'
-  if (speed < 3) return 'success'
-  if (speed < 6) return 'warning'
-  return 'danger'
-}
 
-// 格式化时间
+// 格式化时间（显示小时:分钟格式）
 const formatTime = (timestamp) => {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  if (!timestamp) return ''
+  
+  try {
+    const date = new Date(timestamp)
+    // 检查日期是否有效
+    if (isNaN(date.getTime())) {
+      console.warn('无效的时间戳:', timestamp)
+      return ''
+    }
+    
+    return date.toLocaleTimeString('zh-CN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false
+    })
+  } catch (error) {
+    console.error('时间格式化错误:', error, timestamp)
+    return ''
+  }
 }
 
-// 格式化日期时间
-const formatDateTime = (timestamp) => {
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN')
-}
+
 
 // 格式化持续时间
 const formatDuration = (seconds) => {
@@ -211,46 +327,64 @@ const formatDuration = (seconds) => {
 }
 
 // 加载速度数据
+// 加载速度数据
 const loadSpeedData = async () => {
   try {
+    chartLoading.value = true
     const data = await getSpeedData()
     if (data) {
-      currentSpeed.value = data.current || 0
-      maxSpeed.value = data.max || 0
-      avgSpeed.value = data.average || 0
-      totalDistance.value = data.distance || 0
-      totalTime.value = data.duration || 0
-      if (data.history) {
+      // 确保所有数值都是数字类型
+      currentSpeed.value = Number(data.current) || 0
+      maxSpeed.value = Number(data.max) || 0
+      avgSpeed.value = Number(data.average) || 0
+      totalDistance.value = Number(data.distance) || 0
+      totalTime.value = Number(data.duration) || 0
+      if (data.history && Array.isArray(data.history)) {
+        // 用于图表显示的历史数据
         speedHistory.value = data.history
       }
       lastUpdate.value = Date.now()
     }
   } catch (error) {
     console.error('加载速度数据失败:', error)
+    ElMessage.error('加载速度数据失败，请检查网络连接')
+    // 确保在错误情况下也有默认的数字值
+    currentSpeed.value = 0
+    maxSpeed.value = 0
+    avgSpeed.value = 0
+    totalDistance.value = 0
+    totalTime.value = 0
+  } finally {
+    chartLoading.value = false
   }
 }
 
-// 刷新数据
-const refreshData = () => {
-  loadSpeedData()
-  ElMessage.success('数据已刷新')
-}
 
-// 组件挂载时
+
+// 组件挂载时初始化
 onMounted(() => {
   loadSpeedData()
-  
-  // 每5秒更新一次数据
+  // 每10分钟自动刷新数据
   updateTimer = setInterval(() => {
     loadSpeedData()
-  }, 5000)
+  }, 600000) // 10分钟 = 10 * 60 * 1000 = 600000毫秒
 })
 
-// 组件卸载时
+// 在组件卸载时清理定时器和事件监听器
 onUnmounted(() => {
   if (updateTimer) {
     clearInterval(updateTimer)
+    updateTimer = null
   }
+  // 清理图表实例
+  if (chartInstance) {
+    chartInstance.dispose()
+  }
+})
+
+// 监听图表时间范围变化
+watch(chartTimeRange, () => {
+  loadSpeedData()
 })
 </script>
 
@@ -394,84 +528,28 @@ onUnmounted(() => {
 }
 
 .chart-container {
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 400px;
+  width: 100%;
 }
 
-.chart-placeholder {
-  text-align: center;
-  color: #909399;
+.speed-chart {
+  height: 100%;
+  width: 100%;
 }
 
-.chart-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  color: #c0c4cc;
-}
 
-.chart-data {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 20px;
-}
 
-.data-point {
-  background: #f5f7fa;
-  padding: 8px 12px;
-  border-radius: 6px;
-  text-align: center;
-  min-width: 80px;
-}
-
-.point-time {
-  font-size: 12px;
-  color: #909399;
-}
-
-.point-speed {
-  font-size: 14px;
-  font-weight: bold;
-  color: #303133;
-  margin-top: 4px;
-}
-
-/* 历史记录区域 */
-.speed-history-section {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.history-header h2 {
-  font-size: 18px;
-  color: #303133;
-  margin: 0;
-  font-weight: 600;
-}
-
-/* 速度值样式 */
-.speed-slow { color: #909399; }
-.speed-normal { color: #67c23a; }
-.speed-fast { color: #e6a23c; }
-.speed-very-fast { color: #f56c6c; }
-
-/* 响应式设计 */
+/* 添加更好的移动端适配 */
 @media (max-width: 768px) {
+  .chart-container {
+    height: 250px;
+  }
+  
   .speed-overview {
     grid-template-columns: 1fr;
+    gap: 15px;
   }
+}
   
   .stats-grid {
     grid-template-columns: 1fr;
@@ -483,15 +561,10 @@ onUnmounted(() => {
     gap: 12px;
   }
   
-  .history-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
+
   
   .chart-data {
     flex-direction: column;
     align-items: center;
   }
-}
 </style>

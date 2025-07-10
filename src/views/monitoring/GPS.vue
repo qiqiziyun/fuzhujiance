@@ -2,9 +2,9 @@
   <div class="gps-monitoring">
     <!-- GPS状态概览 -->
     <div class="gps-overview">
-      <div class="gps-card coordinates clickable" @click="showLocationDetail">
+      <div class="gps-card coordinates">
         <div class="card-header">
-          <h3>当前坐标</h3>
+          <h3>坐标详情</h3>
           <span class="accuracy">精度: ±{{ currentLocation.accuracy }}m</span>
         </div>
         <div class="coordinate-info">
@@ -16,14 +16,6 @@
             <span class="coord-label">经度:</span>
             <span class="coord-value">{{ currentLocation.longitude ? currentLocation.longitude.toFixed(6) : '0.000000' }}°</span>
           </div>
-          <div class="coordinate-item">
-            <span class="coord-label">海拔:</span>
-            <span class="coord-value">{{ currentLocation.altitude ? currentLocation.altitude.toFixed(1) : '0.0' }}m</span>
-          </div>
-        </div>
-        <div class="click-hint">
-          <el-icon><Location /></el-icon>
-          <span>点击查看详细位置</span>
         </div>
       </div>
       
@@ -53,16 +45,49 @@
     <div class="map-section">
       <div class="map-header">
         <h2>位置地图</h2>
+        <div class="map-controls">
+          <el-button size="small" @click="refreshLocation" :icon="Refresh">刷新位置</el-button>
+          <el-button size="small" @click="centerToCurrentLocation" :icon="Aim">定位</el-button>
+        </div>
       </div>
       
       <div class="map-container" ref="mapContainer">
-        <!-- 这里应该集成地图组件，如高德地图、百度地图等 -->
-        <div class="map-placeholder">
-          <div class="map-info">
-            <el-icon><Location /></el-icon>
-            <h3>地图显示区域</h3>
-            <p>当前位置: {{ currentLocation.latitude ? currentLocation.latitude.toFixed(4) : '0.0000' }}, {{ currentLocation.longitude ? currentLocation.longitude.toFixed(4) : '0.0000' }}</p>
-            <p>显示模式: {{ getMapModeText(mapMode) }}</p>
+        <!-- 地图显示区域 -->
+        <div class="map-display">
+          <!-- 地图背景 -->
+          <div class="map-background">
+            <!-- 道路网格 -->
+            <div class="road-network">
+              <div class="road horizontal road-1"></div>
+              <div class="road horizontal road-2"></div>
+              <div class="road vertical road-3"></div>
+              <div class="road vertical road-4"></div>
+            </div>
+            
+            <!-- 区域块 -->
+            <div class="area-block area-1"></div>
+            <div class="area-block area-2"></div>
+            <div class="area-block area-3"></div>
+            <div class="area-block area-4"></div>
+            
+            <!-- 位置标记 -->
+            <div class="location-marker">
+              <div class="marker-pin">
+                <el-icon class="marker-icon"><Location /></el-icon>
+              </div>
+              <div class="marker-label">
+                 <div class="label-text">{{ locationName }}</div>
+               </div>
+            </div>
+            
+            <!-- 坐标信息 -->
+            <div class="map-coordinates">
+              <div class="coord-display">
+                {{ currentLocation.latitude ? currentLocation.latitude.toFixed(4) : '0.0000' }}, 
+                {{ currentLocation.longitude ? currentLocation.longitude.toFixed(4) : '0.0000' }}
+              </div>
+              <div class="accuracy-display">精度: ±{{ currentLocation.accuracy }}m</div>
+            </div>
           </div>
         </div>
       </div>
@@ -120,11 +145,13 @@
         </div>
       </div>
     </div>
+    
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import {
   Location,
   Aim,
@@ -142,8 +169,8 @@ const gpsStatus = ref({
 
 // 当前位置
 const currentLocation = ref({
-  latitude: 39.9042,
-  longitude: 116.4074,
+  latitude: 30.2741,
+  longitude: 120.1551,
   altitude: 43.5,
   accuracy: 3.2,
   speed: 2.1,
@@ -152,7 +179,9 @@ const currentLocation = ref({
 })
 
 // 今日距离
-const todayDistance = ref(8.6)
+const todayDistance = ref(2.1)
+
+
 
 // 地图模式
 const mapMode = ref('current')
@@ -173,21 +202,138 @@ const trackHistory = ref([
   {
     id: 1,
     timestamp: Date.now() - 3600000,
-    latitude: 39.9042,
-    longitude: 116.4074,
+    latitude: 30.2741,
+    longitude: 120.1551,
     speed: 2.1
   },
   {
     id: 2,
     timestamp: Date.now() - 7200000,
-    latitude: 39.9012,
-    longitude: 116.4044,
+    latitude: 30.2711,
+    longitude: 120.1521,
     speed: 1.8
   }
 ])
 
 // 定时器
 let updateTimer = null
+let watchId = null
+
+// 位置名称状态
+const locationName = ref('获取位置中...')
+
+// 高德地图逆地理编码API
+const getLocationName = async (lat, lng) => {
+  try {
+    // 注意：需要替换YOUR_AMAP_KEY为真实的高德地图API密钥
+    // 申请地址：https://console.amap.com/dev/key/app
+    const AMAP_KEY = 'YOUR_AMAP_KEY'; // 请替换为真实的API密钥
+    
+    if (AMAP_KEY === 'YOUR_AMAP_KEY') {
+      // 临时演示：根据坐标范围判断位置
+      if (lat >= 30.270 && lat <= 30.320 && lng >= 120.140 && lng <= 120.360) {
+         locationName.value = '浙江理工大学（下沙校区）';
+      } else if (lat >= 30.200 && lat <= 30.400 && lng >= 120.000 && lng <= 120.300) {
+        locationName.value = '杭州市';
+      } else {
+        locationName.value = `位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      }
+      return;
+    }
+    
+    const response = await fetch(`https://restapi.amap.com/v3/geocode/regeo?output=json&location=${lng},${lat}&key=${AMAP_KEY}&radius=1000&extensions=all`)
+    const data = await response.json()
+    
+    if (data.status === '1' && data.regeocode) {
+      const address = data.regeocode.formatted_address
+      const poi = data.regeocode.pois && data.regeocode.pois[0]
+      
+      if (poi && poi.name) {
+        locationName.value = poi.name
+      } else {
+        locationName.value = address || '未知位置'
+      }
+    } else {
+      locationName.value = '未知位置'
+    }
+  } catch (error) {
+    console.error('获取位置名称失败:', error)
+    locationName.value = '位置解析失败'
+  }
+}
+
+// 获取浏览器地理位置
+const getCurrentPosition = () => {
+  if (!navigator.geolocation) {
+    ElMessage.error('浏览器不支持地理位置获取')
+    return
+  }
+  
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 60000
+  }
+  
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      updateLocationFromPosition(position)
+      ElMessage.success('位置更新成功')
+    },
+    (error) => {
+      console.error('获取位置失败:', error)
+      ElMessage.warning('无法获取当前位置，使用默认位置')
+    },
+    options
+  )
+}
+
+// 开始监听位置变化
+const startWatchingPosition = () => {
+  if (!navigator.geolocation) {
+    return
+  }
+  
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 30000
+  }
+  
+  watchId = navigator.geolocation.watchPosition(
+    (position) => {
+      updateLocationFromPosition(position)
+    },
+    (error) => {
+      console.error('位置监听失败:', error)
+    },
+    options
+  )
+}
+
+// 停止监听位置变化
+const stopWatchingPosition = () => {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId)
+    watchId = null
+  }
+}
+
+// 从位置对象更新当前位置
+const updateLocationFromPosition = async (position) => {
+  currentLocation.value = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    altitude: position.coords.altitude || 0,
+    accuracy: position.coords.accuracy || 0,
+    speed: position.coords.speed || 0,
+    bearing: position.coords.heading || 0,
+    timestamp: position.timestamp
+  }
+  
+  // 获取位置名称
+  await getLocationName(position.coords.latitude, position.coords.longitude)
+}
 
 // 获取信号强度文本
 const getSignalText = (bars) => {
@@ -223,26 +369,25 @@ const getMapModeText = (mode) => {
   return modeMap[mode] || '未知模式'
 }
 
-// 显示位置详情
-const showLocationDetail = () => {
-  ElMessage.info('位置详情功能')
-}
+
 
 // 居中到当前位置
 const centerToCurrentLocation = () => {
-  ElMessage.success('已定位到当前位置')
+  getCurrentPosition()
 }
 
 // 刷新位置
 const refreshLocation = () => {
+  getCurrentPosition()
   loadGPSData()
-  ElMessage.success('位置信息已刷新')
 }
 
 // 加载轨迹历史
 const loadTrackHistory = () => {
   console.log('加载轨迹历史:', trackDateRange.value)
 }
+
+
 
 // 加载GPS数据
 const loadGPSData = async () => {
@@ -264,12 +409,19 @@ const loadGPSData = async () => {
 
 // 组件挂载时
 onMounted(() => {
+  // 获取当前位置
+  getCurrentPosition()
+  
+  // 开始监听位置变化
+  startWatchingPosition()
+  
+  // 加载GPS数据
   loadGPSData()
   
-  // 每10秒更新一次数据
+  // 每30秒更新一次数据
   updateTimer = setInterval(() => {
     loadGPSData()
-  }, 10000)
+  }, 30000)
 })
 
 // 组件卸载时
@@ -277,6 +429,9 @@ onUnmounted(() => {
   if (updateTimer) {
     clearInterval(updateTimer)
   }
+  
+  // 停止位置监听
+  stopWatchingPosition()
 })
 </script>
 
@@ -289,22 +444,31 @@ onUnmounted(() => {
 
 
 
+.gps-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
 
+.gps-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
 
 .gps-card:hover {
   transform: translateY(-2px);
 }
 
-.gps-card.clickable {
-  cursor: pointer;
-  transition: all 0.3s ease;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
 }
-
-.gps-card.clickable:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
 
 .card-header h3 {
   font-size: 16px;
@@ -445,24 +609,7 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.click-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 8px;
-  background: rgba(64, 158, 255, 0.1);
-  border-radius: 6px;
-  color: #409eff;
-  font-size: 12px;
-  opacity: 0.8;
-  transition: opacity 0.3s ease;
-}
 
-.gps-card.clickable:hover .click-hint {
-  opacity: 1;
-}
 
 /* 地图显示 */
 .map-section {
@@ -505,28 +652,189 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.map-placeholder {
+.map-display {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  position: relative;
+}
+
+.map-background {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 50%, #e0f0e0 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 道路网格 */
+.road-network {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.road {
+  position: absolute;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+}
+
+.road.horizontal {
+  width: 100%;
+  height: 8px;
+}
+
+.road.vertical {
+  width: 8px;
+  height: 100%;
+}
+
+.road-1 {
+  top: 30%;
+  left: 0;
+}
+
+.road-2 {
+  top: 70%;
+  left: 0;
+}
+
+.road-3 {
+  top: 0;
+  left: 25%;
+}
+
+.road-4 {
+  top: 0;
+  left: 75%;
+}
+
+/* 区域块 */
+.area-block {
+  position: absolute;
+  background: rgba(180, 220, 180, 0.3);
+  border: 2px dashed rgba(100, 150, 100, 0.5);
+  border-radius: 4px;
+}
+
+.area-1 {
+  top: 10%;
+  left: 10%;
+  width: 30%;
+  height: 15%;
+}
+
+.area-2 {
+  top: 10%;
+  right: 10%;
+  width: 25%;
+  height: 20%;
+}
+
+.area-3 {
+  bottom: 20%;
+  left: 15%;
+  width: 35%;
+  height: 25%;
+}
+
+.area-4 {
+  bottom: 10%;
+  right: 15%;
+  width: 20%;
+  height: 15%;
+}
+
+/* 位置标记 */
+.location-marker {
+  position: absolute;
+  top: 45%;
+  left: 45%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+
+.marker-pin {
+  width: 40px;
+  height: 40px;
+  background: #409eff;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+  animation: pulse 2s infinite;
 }
 
-.map-info {
-  text-align: center;
-  color: #606266;
+.marker-icon {
+  color: white;
+  font-size: 20px;
+  transform: rotate(45deg);
 }
 
-.map-info h3 {
-  margin: 8px 0;
-  color: #303133;
+.marker-label {
+  position: absolute;
+  top: 45px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  border: 1px solid #e0e0e0;
 }
 
-.map-info p {
-  margin: 4px 0;
+.label-text {
   font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 2px;
+}
+
+.label-subtext {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 坐标信息 */
+.map-coordinates {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+}
+
+.coord-display {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.accuracy-display {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 动画效果 */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(64, 158, 255, 0.6), 0 0 0 10px rgba(64, 158, 255, 0.1);
+  }
+  100% {
+    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+  }
 }
 
 /* 历史轨迹 */
@@ -639,6 +947,8 @@ onUnmounted(() => {
   position: absolute;
   right: 12px;
 }
+
+
 
 /* 响应式设计 */
 @media (max-width: 768px) {
