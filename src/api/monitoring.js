@@ -20,144 +20,63 @@ export const getGripStrengthData = () => {
   })
 }
 
-// 获取左手握力数据
-// export const getLeftGripData = async () => {
-//   try {
-//     const response = await request.get('/sensor/lfx')
-//     console.log('左手握力数据:', response)
-
-//     if (!response || !Array.isArray(response)) {
-//       throw new Error('左手握力数据格式错误')
-//     }
-
-//     // 按时间排序
-//     const sortedData = response.sort((a, b) => {
-//       const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
-//       const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
-//       return timeA - timeB
-//     })
-
-//     // 转换数据格式
-//     const history = sortedData.map(item => ({
-//       time: new Date(item.time || item.timestamp || item.createTime || Date.now()).getTime(),
-//       value: Number(item.lfx || item.force || item.value || 0),
-//       timestamp: item.time || item.timestamp || item.createTime || new Date().toISOString()
-//     }))
-
-//     const values = history.map(item => item.value)
-//     const current = values.length > 0 ? values[values.length - 1] : 0
-//     const average = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0
-//     const max = values.length > 0 ? Math.max(...values) : 0
-
-//     return {
-//       current,
-//       average,
-//       max,
-//       history,
-//       status: 'normal'
-//     }
-//   } catch (error) {
-//     console.error('获取左手握力数据失败:', error)
-//     return {
-//       current: 0,
-//       average: 0,
-//       max: 0,
-//       history: [],
-//       status: 'error'
-//     }
-//   }
-// }
-
-// 获取右手握力数据
-// export const getRightGripData = async () => {
-//   try {
-//     const response = await request.get('/sensor/rfx')
-//     console.log('右手握力数据:', response)
-
-//     if (!response || !Array.isArray(response)) {
-//       throw new Error('右手握力数据格式错误')
-//     }
-
-//     // 按时间排序
-//     const sortedData = response.sort((a, b) => {
-//       const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
-//       const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
-//       return timeA - timeB
-//     })
-
-//     // 转换数据格式
-//     const history = sortedData.map(item => ({
-//       time: new Date(item.time || item.timestamp || item.createTime || Date.now()).getTime(),
-//       value: Number(item.rfx || item.force || item.value || 0),
-//       timestamp: item.time || item.timestamp || item.createTime || new Date().toISOString()
-//     }))
-
-//     const values = history.map(item => item.value)
-//     const current = values.length > 0 ? values[values.length - 1] : 0
-//     const average = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0
-//     const max = values.length > 0 ? Math.max(...values) : 0
-
-//     return {
-//       current,
-//       average,
-//       max,
-//       history,
-//       status: 'normal'
-//     }
-//   } catch (error) {
-//     console.error('获取右手握力数据失败:', error)
-//     return {
-//       current: 0,
-//       average: 0,
-//       max: 0,
-//       history: [],
-//       status: 'error'
-//     }
-//   }
-// }
-
-// 获取双手握力数据（使用统一接口）
+// 获取双手握力数据（从统一API）
 export const getDualGripDataFromUnifiedAPI = async () => {
   try {
     const response = await request.get('/sensor/lfx_rfx')
-    console.log('双手握力数据:', response)
+    console.log('后端返回的原始数据:', response)
 
-    if (!response || !Array.isArray(response)) {
-      throw new Error('双手握力数据格式错误')
+    // 检查响应结构
+    let data = response
+    if (response && response.data && Array.isArray(response.data)) {
+      data = response.data
+    } else if (!Array.isArray(response)) {
+      console.error('后端返回的数据不是数组格式:', response)
+      throw new Error('数据格式错误')
     }
 
-    // 按时间排序
-    const sortedData = response.sort((a, b) => {
-      const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
-      const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
-      return timeA - timeB
-    })
+    console.log('处理的数据数组:', data)
+    console.log('数据长度:', data.length)
 
-    // 分别处理左手和右手数据
+    if (data.length === 0) {
+      return {
+        left: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+        right: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+        combined: { current: 0, average: 0, max: 0, status: 'normal' }
+      }
+    }
+
+    // 完全按照原始顺序处理数据，不进行任何排序
     const leftHistory = []
     const rightHistory = []
 
-    sortedData.forEach(item => {
+    data.forEach((item, index) => {
       const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
-      const timeValue = new Date(timestamp).getTime()
+      const timeValue = new Date(timestamp).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
 
-      // 左手数据
-      if (item.lfx !== undefined && item.lfx !== null) {
-        leftHistory.push({
-          time: timeValue,
-          value: Number(item.lfx || 0),
-          timestamp: timestamp
-        })
-      }
+      // 左手数据 - 完全按照原始顺序
+      leftHistory.push({
+        time: timeValue,
+        value: Number(item.lfx),
+        timestamp: timestamp,
+        originalIndex: index,
+        originalData: item
+      })
 
-      // 右手数据
-      if (item.rfx !== undefined && item.rfx !== null) {
-        rightHistory.push({
-          time: timeValue,
-          value: Number(item.rfx || 0),
-          timestamp: timestamp
-        })
-      }
+      // 右手数据 - 完全按照原始顺序
+      rightHistory.push({
+        time: timeValue,
+        value: Number(item.rfx),
+        timestamp: timestamp,
+        originalIndex: index,
+        originalData: item
+      })
     })
 
     // 计算左手统计数据
@@ -171,6 +90,12 @@ export const getDualGripDataFromUnifiedAPI = async () => {
     const rightCurrent = rightValues.length > 0 ? rightValues[rightValues.length - 1] : 0
     const rightAverage = rightValues.length > 0 ? rightValues.reduce((a, b) => a + b, 0) / rightValues.length : 0
     const rightMax = rightValues.length > 0 ? Math.max(...rightValues) : 0
+
+    console.log(`左手数据点: ${leftHistory.length}, 右手数据点: ${rightHistory.length}`)
+    console.log('左手第一个数据点:', leftHistory[0])
+    console.log('右手第一个数据点:', rightHistory[0])
+    console.log('验证 - 左手第一个值:', leftHistory[0]?.value)
+    console.log('验证 - 右手第一个值:', rightHistory[0]?.value)
 
     return {
       left: {
@@ -419,57 +344,78 @@ export const getDashboardData = () => {
 export const getLfyRfyGripData = async () => {
   try {
     const response = await request.get('/sensor/lfy_rfy')
-    console.log('lfy_rfy握力数据:', response)
+    console.log('后端返回的原始lfy_rfy数据:', response)
 
-    if (!response || !Array.isArray(response)) {
-      throw new Error('lfy_rfy握力数据格式错误')
+    // 检查响应结构
+    let data = response
+    if (response && response.data && Array.isArray(response.data)) {
+      data = response.data
+    } else if (!Array.isArray(response)) {
+      console.error('后端返回的lfy_rfy数据不是数组格式:', response)
+      throw new Error('lfy_rfy数据格式错误')
     }
 
-    // 按时间排序
-    const sortedData = response.sort((a, b) => {
-      const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
-      const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
-      return timeA - timeB
-    })
+    console.log('处理的lfy_rfy数据数组:', data)
+    console.log('lfy_rfy数据长度:', data.length)
 
-    // 分别处理 lfy 和 rfy 数据
+    if (data.length === 0) {
+      return {
+        lfy: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+        rfy: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+        combined: { current: 0, average: 0, max: 0, status: 'normal' }
+      }
+    }
+
+    // 完全按照原始顺序处理数据，不进行任何排序
     const lfyHistory = []
     const rfyHistory = []
 
-    sortedData.forEach(item => {
+    data.forEach((item, index) => {
       const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
-      const timeValue = new Date(timestamp).getTime()
+      const timeValue = new Date(timestamp).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
 
-      // lfy 数据
-      if (item.lfy !== undefined && item.lfy !== null) {
-        lfyHistory.push({
-          time: timeValue,
-          value: Number(item.lfy || 0),
-          timestamp: timestamp
-        })
-      }
+      // LFY数据 - 完全按照原始顺序
+      lfyHistory.push({
+        time: timeValue,
+        value: Number(item.lfy),
+        timestamp: timestamp,
+        originalIndex: index,
+        originalData: item
+      })
 
-      // rfy 数据
-      if (item.rfy !== undefined && item.rfy !== null) {
-        rfyHistory.push({
-          time: timeValue,
-          value: Number(item.rfy || 0),
-          timestamp: timestamp
-        })
-      }
+      // RFY数据 - 完全按照原始顺序
+      rfyHistory.push({
+        time: timeValue,
+        value: Number(item.rfy),
+        timestamp: timestamp,
+        originalIndex: index,
+        originalData: item
+      })
     })
 
-    // 计算 lfy 统计数据
+    // 计算LFY统计数据
     const lfyValues = lfyHistory.map(item => item.value)
     const lfyCurrent = lfyValues.length > 0 ? lfyValues[lfyValues.length - 1] : 0
     const lfyAverage = lfyValues.length > 0 ? lfyValues.reduce((a, b) => a + b, 0) / lfyValues.length : 0
     const lfyMax = lfyValues.length > 0 ? Math.max(...lfyValues) : 0
 
-    // 计算 rfy 统计数据
+    // 计算RFY统计数据
     const rfyValues = rfyHistory.map(item => item.value)
     const rfyCurrent = rfyValues.length > 0 ? rfyValues[rfyValues.length - 1] : 0
     const rfyAverage = rfyValues.length > 0 ? rfyValues.reduce((a, b) => a + b, 0) / rfyValues.length : 0
     const rfyMax = rfyValues.length > 0 ? Math.max(...rfyValues) : 0
+
+    console.log(`LFY数据点: ${lfyHistory.length}, RFY数据点: ${rfyHistory.length}`)
+    console.log('LFY第一个数据点:', lfyHistory[0])
+    console.log('RFY第一个数据点:', rfyHistory[0])
+    console.log('验证 - LFY第一个值:', lfyHistory[0]?.value)
+    console.log('验证 - RFY第一个值:', rfyHistory[0]?.value)
 
     return {
       lfy: {
@@ -502,3 +448,241 @@ export const getLfyRfyGripData = async () => {
     }
   }
 }
+
+// 获取所有 LFX_RFX 握力数据（参考速度数据获取方式）
+export const getAllLfxRfxGripData = async () => {
+  try {
+    const gripData = await request.get('/sensor/lfx_rfx')
+    console.log('后端返回的原始握力数据:', gripData)
+
+    // 检查数据格式
+    if (!gripData) {
+      console.error('后端返回握力数据为空')
+      throw new Error('后端返回握力数据为空')
+    }
+
+    // 如果后端返回的是数组格式
+    if (Array.isArray(gripData)) {
+      console.log('握力数据格式：数组，长度:', gripData.length)
+
+      // 检查数组元素格式
+      if (gripData.length > 0) {
+        console.log('第一个握力元素:', gripData[0])
+
+        // 按时间排序
+        const sortedData = gripData.sort((a, b) => {
+          const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
+          const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
+          return timeA - timeB
+        })
+
+        // 使用全部数据，不进行过滤
+        console.log(`使用全部握力数据，共 ${sortedData.length} 条`)
+
+        // 分别处理左手和右手数据
+        const leftHistory = []
+        const rightHistory = []
+
+        sortedData.forEach(item => {
+          const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
+          const timeValue = new Date(timestamp).getTime()
+
+          // 左手数据 (LFX)
+          if (item.lfx !== undefined && item.lfx !== null) {
+            leftHistory.push({
+              time: timeValue,
+              value: Number(item.lfx || 0),
+              timestamp: timestamp
+            })
+          }
+
+          // 右手数据 (RFX)
+          if (item.rfx !== undefined && item.rfx !== null) {
+            rightHistory.push({
+              time: timeValue,
+              value: Number(item.rfx || 0),
+              timestamp: timestamp
+            })
+          }
+        })
+
+        // 计算左手统计数据
+        const leftValues = leftHistory.map(item => item.value)
+        const leftCurrent = leftValues.length > 0 ? leftValues[leftValues.length - 1] : 0
+        const leftAverage = leftValues.length > 0 ? leftValues.reduce((a, b) => a + b, 0) / leftValues.length : 0
+        const leftMax = leftValues.length > 0 ? Math.max(...leftValues) : 0
+
+        // 计算右手统计数据
+        const rightValues = rightHistory.map(item => item.value)
+        const rightCurrent = rightValues.length > 0 ? rightValues[rightValues.length - 1] : 0
+        const rightAverage = rightValues.length > 0 ? rightValues.reduce((a, b) => a + b, 0) / rightValues.length : 0
+        const rightMax = rightValues.length > 0 ? Math.max(...rightValues) : 0
+
+        return {
+          left: {
+            current: leftCurrent,
+            average: leftAverage,
+            max: leftMax,
+            history: leftHistory,
+            status: 'normal'
+          },
+          right: {
+            current: rightCurrent,
+            average: rightAverage,
+            max: rightMax,
+            history: rightHistory,
+            status: 'normal'
+          },
+          combined: {
+            current: leftCurrent + rightCurrent,
+            average: leftAverage + rightAverage,
+            max: leftMax + rightMax,
+            status: 'normal'
+          }
+        }
+      } else {
+        console.log('握力数组为空，返回默认数据')
+        return {
+          left: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+          right: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+          combined: { current: 0, average: 0, max: 0, status: 'normal' }
+        }
+      }
+    } else {
+      console.error('握力数据格式不是数组:', typeof gripData, gripData)
+      throw new Error(`期望数组格式，但收到: ${typeof gripData}`)
+    }
+  } catch (error) {
+    console.error('获取握力数据失败:', error)
+    console.error('错误详情:', error.message)
+
+    // 如果是网络错误，返回错误状态
+    if (error.message.includes('Network Error') || error.message.includes('timeout')) {
+      return {
+        left: { current: 0, average: 0, max: 0, history: [], status: 'network_error' },
+        right: { current: 0, average: 0, max: 0, history: [], status: 'network_error' },
+        combined: { current: 0, average: 0, max: 0, status: 'network_error' }
+      }
+    }
+
+    // 返回默认数据以防止页面崩溃
+    return {
+      left: { current: 0, average: 0, max: 0, history: [], status: 'error' },
+      right: { current: 0, average: 0, max: 0, history: [], status: 'error' },
+      combined: { current: 0, average: 0, max: 0, status: 'error' }
+    }
+  }
+}
+
+// 获取 lfz_rfz 握力数据
+export const getLfzRfzGripData = async () => {
+  try {
+    const response = await request.get('/sensor/lfz_rfz')
+    console.log('后端返回的原始lfz_rfz数据:', response)
+
+    // 检查响应结构
+    let data = response
+    if (response && response.data && Array.isArray(response.data)) {
+      data = response.data
+    } else if (!Array.isArray(response)) {
+      console.error('后端返回的lfz_rfz数据不是数组格式:', response)
+      throw new Error('lfz_rfz数据格式错误')
+    }
+
+    console.log('处理的lfz_rfz数据数组:', data)
+    console.log('lfz_rfz数据长度:', data.length)
+
+    if (data.length === 0) {
+      return {
+        lfz: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+        rfz: { current: 0, average: 0, max: 0, history: [], status: 'normal' },
+        combined: { current: 0, average: 0, max: 0, status: 'normal' }
+      }
+    }
+
+    // 完全按照原始顺序处理数据，不进行任何排序
+    const lfzHistory = []
+    const rfzHistory = []
+
+    data.forEach((item, index) => {
+      const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
+      const timeValue = new Date(timestamp).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+
+      // LFZ数据 - 完全按照原始顺序
+      lfzHistory.push({
+        time: timeValue,
+        value: Number(item.lfz),
+        timestamp: timestamp,
+        originalIndex: index,
+        originalData: item
+      })
+
+      // RFZ数据 - 完全按照原始顺序
+      rfzHistory.push({
+        time: timeValue,
+        value: Number(item.rfz),
+        timestamp: timestamp,
+        originalIndex: index,
+        originalData: item
+      })
+    })
+
+    // 计算LFZ统计数据
+    const lfzValues = lfzHistory.map(item => item.value)
+    const lfzCurrent = lfzValues.length > 0 ? lfzValues[lfzValues.length - 1] : 0
+    const lfzAverage = lfzValues.length > 0 ? lfzValues.reduce((a, b) => a + b, 0) / lfzValues.length : 0
+    const lfzMax = lfzValues.length > 0 ? Math.max(...lfzValues) : 0
+
+    // 计算RFZ统计数据
+    const rfzValues = rfzHistory.map(item => item.value)
+    const rfzCurrent = rfzValues.length > 0 ? rfzValues[rfzValues.length - 1] : 0
+    const rfzAverage = rfzValues.length > 0 ? rfzValues.reduce((a, b) => a + b, 0) / rfzValues.length : 0
+    const rfzMax = rfzValues.length > 0 ? Math.max(...rfzValues) : 0
+
+    console.log(`LFZ数据点: ${lfzHistory.length}, RFZ数据点: ${rfzHistory.length}`)
+    console.log('LFZ第一个数据点:', lfzHistory[0])
+    console.log('RFZ第一个数据点:', rfzHistory[0])
+    console.log('验证 - LFZ第一个值:', lfzHistory[0]?.value)
+    console.log('验证 - RFZ第一个值:', rfzHistory[0]?.value)
+
+    return {
+      lfz: {
+        current: lfzCurrent,
+        average: lfzAverage,
+        max: lfzMax,
+        history: lfzHistory,
+        status: 'normal'
+      },
+      rfz: {
+        current: rfzCurrent,
+        average: rfzAverage,
+        max: rfzMax,
+        history: rfzHistory,
+        status: 'normal'
+      },
+      combined: {
+        current: lfzCurrent + rfzCurrent,
+        average: lfzAverage + rfzAverage,
+        max: lfzMax + rfzMax,
+        status: 'normal'
+      }
+    }
+  } catch (error) {
+    console.error('获取lfz_rfz握力数据失败:', error)
+    return {
+      lfz: { current: 0, average: 0, max: 0, history: [], status: 'error' },
+      rfz: { current: 0, average: 0, max: 0, history: [], status: 'error' },
+      combined: { current: 0, average: 0, max: 0, status: 'error' }
+    }
+  }
+}
+
+
+
+
