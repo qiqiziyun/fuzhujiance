@@ -19,20 +19,20 @@
       <div class="speed-card stats">
         <div class="card-header">
           <h3>速度统计</h3>
-          <div class="update-time">{{ formatTime(lastUpdate) }}</div>
+          <el-icon class="card-icon"><TrendCharts /></el-icon>
         </div>
         <div class="stats-grid">
           <div class="stat-item">
             <div class="stat-value">{{ (maxSpeed || 0).toFixed(1) }}</div>
-            <div class="stat-label">最高速度</div>
+            <div class="stat-label">最高速度 (m/s)</div>
           </div>
           <div class="stat-item">
             <div class="stat-value">{{ (avgSpeed || 0).toFixed(1) }}</div>
-            <div class="stat-label">平均速度</div>
+            <div class="stat-label">平均速度 (m/s)</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">{{ (totalDistance || 0).toFixed(2) }}</div>
-            <div class="stat-label">总距离(km)</div>
+            <div class="stat-value">{{ (totalDistance || 0).toFixed(1) }}</div>
+            <div class="stat-label">总距离 (km)</div>
           </div>
           <div class="stat-item">
             <div class="stat-value">{{ formatDuration(totalTime) }}</div>
@@ -47,11 +47,26 @@
       <div class="chart-header">
         <h2>速度变化趋势</h2>
         <div class="chart-controls">
-          <el-radio-group v-model="chartTimeRange" @change="loadSpeedData">
-            <el-radio-button value="1h">1小时</el-radio-button>
-            <el-radio-button value="6h">6小时</el-radio-button>
-            <el-radio-button value="24h">24小时</el-radio-button>
-          </el-radio-group>
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+            :disabled-date="disabledDate"
+            :picker-options="pickerOptions"
+            style="margin-right: 10px;"
+          />
+          <el-button 
+            type="primary" 
+            @click="handleQuery"
+            :loading="chartLoading"
+          >
+            查询
+          </el-button>
         </div>
       </div>
       <div class="chart-container">
@@ -106,8 +121,85 @@ const totalDistance = ref(12.6)
 const totalTime = ref(14400) // 秒
 const lastUpdate = ref(Date.now())
 
-// 图表时间范围
-const chartTimeRange = ref('1h')
+// 日期范围选择
+const dateRange = ref([
+  new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7天前
+  new Date().toISOString().split('T')[0] // 今天
+])
+
+// 禁用日期的函数
+const disabledDate = (time) => {
+  const today = new Date()
+  today.setHours(23, 59, 59, 999) // 设置为今天的最后一刻
+  
+  // 禁用未来的日期
+  if (time.getTime() > today.getTime()) {
+    return true
+  }
+  
+  // 禁用15天以前的日期
+  const fifteenDaysAgo = new Date()
+  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15)
+  fifteenDaysAgo.setHours(0, 0, 0, 0) // 设置为15天前的开始
+  
+  if (time.getTime() < fifteenDaysAgo.getTime()) {
+    return true
+  }
+  
+  return false
+}
+
+// 日期选择器配置
+const pickerOptions = {
+  onPick: ({ maxDate, minDate }) => {
+    if (minDate && maxDate) {
+      // 检查选择的日期范围是否超过15天
+      const diffTime = Math.abs(maxDate - minDate)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (diffDays > 15) {
+        ElMessage.warning('最多只能选择15天的时间范围')
+        // 重置为默认范围
+        dateRange.value = [
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          new Date().toISOString().split('T')[0]
+        ]
+      }
+    }
+  }
+}
+
+// 日期快捷选项
+// 删除整个 dateShortcuts 配置
+// const dateShortcuts = [
+//   {
+//     text: '最近7天',
+//     value: () => {
+//       const end = new Date()
+//       const start = new Date()
+//       start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
+//       return [start, end]
+//     }
+//   },
+//   {
+//     text: '最近30天',
+//     value: () => {
+//       const end = new Date()
+//       const start = new Date()
+//       start.setTime(start.getTime() - 3600 * 1000 * 24 * 30)
+//       return [start, end]
+//     }
+//   },
+//   {
+//     text: '最近3个月',
+//     value: () => {
+//       const end = new Date()
+//       const start = new Date()
+//       start.setTime(start.getTime() - 3600 * 1000 * 24 * 90)
+//       return [start, end]
+//     }
+//   }
+// ]
 
 // 速度历史数据（用于图表显示）
 const speedHistory = ref([])
@@ -326,12 +418,16 @@ const formatDuration = (seconds) => {
   return `${hours}h ${minutes}m`
 }
 
-// 加载速度数据
-// 加载速度数据
+// 修改加载速度数据函数，支持日期范围参数
 const loadSpeedData = async () => {
   try {
     chartLoading.value = true
-    const data = await getSpeedData()
+    // 传递日期范围参数给API
+    const params = {
+      startDate: dateRange.value[0],
+      endDate: dateRange.value[1]
+    }
+    const data = await getSpeedData(params)
     if (data) {
       // 确保所有数值都是数字类型
       currentSpeed.value = Number(data.current) || 0
@@ -359,7 +455,15 @@ const loadSpeedData = async () => {
   }
 }
 
-
+// 查询按钮点击处理
+const handleQuery = () => {
+  if (dateRange.value && dateRange.value.length === 2) {
+    console.log('查询日期范围:', dateRange.value)
+    loadSpeedData()
+  } else {
+    ElMessage.warning('请选择有效的日期范围')
+  }
+}
 
 // 组件挂载时初始化
 onMounted(() => {
@@ -376,15 +480,6 @@ onUnmounted(() => {
     clearInterval(updateTimer)
     updateTimer = null
   }
-  // 清理图表实例
-  if (chartInstance) {
-    chartInstance.dispose()
-  }
-})
-
-// 监听图表时间范围变化
-watch(chartTimeRange, () => {
-  loadSpeedData()
 })
 </script>
 
@@ -518,6 +613,14 @@ watch(chartTimeRange, () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  padding-left: 20px;
 }
 
 .chart-header h2 {

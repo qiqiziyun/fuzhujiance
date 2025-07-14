@@ -152,98 +152,35 @@ export const getPostureAngleData = () => {
 }
 
 // 获取速度数据
-export const getSpeedData = async () => {
+// 获取速度数据 - 修改为使用新的查询接口
+export const getSpeedData = async (params = {}) => {
   try {
-    const speedData = await request.get('/speed/xian')
-    console.log('后端返回的原始数据:', speedData)
+    // 使用新的查询接口
+    const response = await request.get('/speed/query', {
+      params: {
+        startDate: params.startDate,
+        endDate: params.endDate
+      }
+    })
+
+    console.log('后端返回的速度查询数据:', response)
 
     // 检查数据格式
-    if (!speedData) {
+    if (!response) {
       console.error('后端返回数据为空')
       throw new Error('后端返回数据为空')
     }
 
-    // 如果后端返回的是数组格式
-    if (Array.isArray(speedData)) {
-      console.log('数据格式：数组，长度:', speedData.length)
-
-      // 检查数组元素格式
-      if (speedData.length > 0) {
-        console.log('第一个元素:', speedData[0])
-
-        // 按时间排序
-        const sortedData = speedData.sort((a, b) => {
-          const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
-          const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
-          return timeA - timeB
-        })
-
-        // 移除5分钟间隔过滤，使用全部数据
-        console.log(`使用全部数据，共 ${sortedData.length} 条`)
-
-        // 计算统计数据
-        const speeds = sortedData.map(item => {
-          // 兼容不同的字段名
-          return Number(item.speed || item.velocity || item.value || 0)
-        })
-
-        const current = speeds.length > 0 ? speeds[speeds.length - 1] : 0
-        const average = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0
-        const max = speeds.length > 0 ? Math.max(...speeds) : 0
-
-        // 转换数据格式以适配前端组件
-        const history = sortedData.map(item => {
-          const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
-          return {
-            time: new Date(timestamp).getTime(),
-            speed: Number(item.speed || item.velocity || item.value || 0),
-            timestamp: timestamp
-          }
-        })
-
-        // 计算总距离和总时长
-        let totalDistance = 0
-        let totalDuration = 0
-
-        if (history.length > 1) {
-          // 计算总时长（最后时间 - 第一时间）
-          totalDuration = (history[history.length - 1].time - history[0].time) / 1000 // 转换为秒
-
-          // 简单估算总距离（平均速度 * 时间）
-          totalDistance = (average * totalDuration) / 3600 // 转换为公里
-        }
-
-        return {
-          current,
-          average,
-          max,
-          distance: totalDistance,
-          duration: totalDuration,
-          history,
-          status: 'normal'
-        }
-      } else {
-        console.log('数组为空，返回默认数据')
-        return {
-          current: 0,
-          average: 0,
-          max: 0,
-          distance: 0,
-          duration: 0,
-          history: [],
-          status: 'normal'
-        }
-      }
-    } else {
-      console.error('数据格式不是数组:', typeof speedData, speedData)
-      throw new Error(`期望数组格式，但收到: ${typeof speedData}`)
+    let speedData = response
+    // 如果响应包装在data字段中
+    if (response.data && Array.isArray(response.data)) {
+      speedData = response.data
+    } else if (!Array.isArray(response)) {
+      console.error('后端返回的数据不是数组格式:', response)
+      throw new Error('数据格式错误')
     }
-  } catch (error) {
-    console.error('获取速度数据失败:', error)
-    console.error('错误详情:', error.message)
 
-    // 如果是网络错误，返回错误状态
-    if (error.message.includes('Network Error') || error.message.includes('timeout')) {
+    if (speedData.length === 0) {
       return {
         current: 0,
         average: 0,
@@ -251,11 +188,61 @@ export const getSpeedData = async () => {
         distance: 0,
         duration: 0,
         history: [],
-        status: 'network_error'
+        status: 'normal'
       }
     }
 
-    // 返回默认数据以防止页面崩溃
+    // 按时间排序
+    const sortedData = speedData.sort((a, b) => {
+      const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
+      const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
+      return timeA - timeB
+    })
+
+    console.log(`处理速度数据，共 ${sortedData.length} 条`)
+
+    // 计算统计数据
+    const speeds = sortedData.map(item => {
+      // 兼容不同的字段名
+      return Number(item.speed || item.velocity || item.value || 0)
+    })
+
+    const current = speeds.length > 0 ? speeds[speeds.length - 1] : 0
+    const average = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0
+    const max = speeds.length > 0 ? Math.max(...speeds) : 0
+
+    // 转换数据格式以适配前端图表组件
+    const history = sortedData.map(item => {
+      const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
+      return {
+        timestamp: timestamp,
+        speed: Number(item.speed || item.velocity || item.value || 0),
+        time: new Date(timestamp).getTime()
+      }
+    })
+
+    // 计算总距离和总时长
+    let totalDistance = 0
+    let totalDuration = 0
+
+    if (history.length > 1) {
+      // 计算总时长（最后时间 - 第一时间）
+      totalDuration = (history[history.length - 1].time - history[0].time) / 1000 // 转换为秒
+      // 简单估算总距离（平均速度 * 时间）
+      totalDistance = (average * totalDuration) / 3600 // 转换为公里
+    }
+
+    return {
+      current,
+      average,
+      max,
+      distance: totalDistance,
+      duration: totalDuration,
+      history,
+      status: 'normal'
+    }
+  } catch (error) {
+    console.error('获取速度数据失败:', error)
     return {
       current: 0,
       average: 0,
