@@ -492,15 +492,15 @@ onUnmounted(() => {
 
 .speed-overview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .speed-card {
   background: white;
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease;
 }
@@ -513,19 +513,19 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .card-header h3 {
-  font-size: 16px;
+  font-size: 15px;
   color: #303133;
   margin: 0;
   font-weight: 600;
 }
 
 .speed-status {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #67c23a;
 }
@@ -537,20 +537,20 @@ onUnmounted(() => {
 
 .speed-display {
   text-align: center;
-  margin: 20px 0;
+  margin: 16px 0;
 }
 
 .speed-value {
-  font-size: 48px;
+  font-size: 40px;
   font-weight: bold;
   color: #303133;
   line-height: 1;
 }
 
 .speed-unit {
-  font-size: 16px;
+  font-size: 14px;
   color: #909399;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .speed-info {
@@ -558,52 +558,52 @@ onUnmounted(() => {
 }
 
 .speed-desc {
-  font-size: 14px;
+  font-size: 13px;
   color: #606266;
   background: #f5f7fa;
-  padding: 4px 12px;
-  border-radius: 12px;
+  padding: 3px 10px;
+  border-radius: 10px;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .stat-item {
   text-align: center;
-  padding: 12px;
+  padding: 10px;
   background: #f8f9fa;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .stat-value {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: bold;
   color: #303133;
   display: block;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #909399;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .update-time {
-  font-size: 12px;
+  font-size: 11px;
   color: #909399;
   background: #f5f7fa;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: 3px;
 }
 
-/* 图表区域 */
+/* 图表区域 - 调整为更大的尺寸 */
 .speed-chart-section {
   background: white;
   border-radius: 12px;
-  padding: 24px;
+  padding: 28px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   margin-bottom: 30px;
 }
@@ -612,13 +612,13 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .chart-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-left: auto;
   padding-left: 20px;
 }
@@ -631,7 +631,7 @@ onUnmounted(() => {
 }
 
 .chart-container {
-  height: 400px;
+  height: 500px;
   width: 100%;
 }
 
@@ -640,19 +640,16 @@ onUnmounted(() => {
   width: 100%;
 }
 
-
-
 /* 添加更好的移动端适配 */
 @media (max-width: 768px) {
   .chart-container {
-    height: 250px;
+    height: 350px;
   }
   
   .speed-overview {
     grid-template-columns: 1fr;
     gap: 15px;
   }
-}
   
   .stats-grid {
     grid-template-columns: 1fr;
@@ -661,13 +658,12 @@ onUnmounted(() => {
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 15px;
   }
-  
-
   
   .chart-data {
     flex-direction: column;
     align-items: center;
   }
+}
 </style>
