@@ -72,7 +72,29 @@
     <!-- 握力图表 -->
     <div class="grip-chart-section">
       <div class="chart-header">
-        <h2>握力变化趋势</h2>
+        <h2>LFX/RFX握力变化趋势</h2>
+        <div class="chart-controls">
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+            :disabled-date="disabledDate"
+            :picker-options="pickerOptions"
+            style="margin-right: 10px;"
+          />
+          <el-button 
+            type="primary" 
+            @click="handleQuery"
+            :loading="chartLoading"
+          >
+            查询
+          </el-button>
+        </div>
         <div class="chart-legend">
           <div class="legend-item">
             <div class="legend-color left"></div>
@@ -98,6 +120,16 @@
     <div class="grip-chart-section">
       <div class="chart-header">
         <h2>LFY/RFY 握力变化趋势</h2>
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-color left"></div>
+            <span>LFY握力</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color right"></div>
+            <span>RFY握力</span>
+          </div>
+        </div>
       </div>
       <div class="chart-container">
         <v-chart 
@@ -112,7 +144,7 @@
     <!-- 第三个图表：LFZ/RFZ 握力图表 -->
     <div class="grip-chart-section">
       <div class="chart-header">
-        <h2>LFZ/RFZ 握力监测</h2>
+        <h2>LFZ/RFZ 握力变化趋势</h2>
         <div class="chart-legend">
           <div class="legend-item">
             <div class="legend-color lfz"></div>
@@ -182,6 +214,62 @@ const lfzRfzChartLoading = ref(false)
 // 定时器
 let updateTimer = null
 
+// 日期范围选择
+const dateRange = ref([
+  new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7天前
+  new Date().toISOString().split('T')[0] // 今天
+])
+
+// 禁用日期的函数
+const disabledDate = (time) => {
+  const today = new Date()
+  today.setHours(23, 59, 59, 999) // 设置为今天的最后一刻
+  
+  // 禁用未来的日期
+  if (time.getTime() > today.getTime()) {
+    return true
+  }
+  
+  // 禁用15天以前的日期
+  const fifteenDaysAgo = new Date()
+  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15)
+  fifteenDaysAgo.setHours(0, 0, 0, 0) // 设置为15天前的开始
+  
+  if (time.getTime() < fifteenDaysAgo.getTime()) {
+    return true
+  }
+  
+  return false
+}
+
+// 日期选择器配置
+const pickerOptions = {
+  onPick: ({ maxDate, minDate }) => {
+    if (minDate && maxDate) {
+      // 检查选择的日期范围是否超过15天
+      const diffTime = Math.abs(maxDate - minDate)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
+      if (diffDays > 15) {
+        ElMessage.warning('最多只能选择15天的时间范围')
+        // 重置为默认范围
+        dateRange.value = [
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          new Date().toISOString().split('T')[0]
+        ]
+      }
+    }
+  }
+}
+
+// 查询按钮处理函数
+const handleQuery = () => {
+  console.log('查询日期范围:', dateRange.value)
+  loadGripData()
+  loadLfyRfyGripData()
+  loadLfzRfzGripData()
+}
+
 // 图表配置
 const chartOption = computed(() => {
   console.log('左手数据:', leftData.value.history)
@@ -197,13 +285,13 @@ const chartOption = computed(() => {
   if (dataLength === 0) {
     return {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['左手握力', '右手握力'], top: 10 },
+      // legend: { data: ['左手握力', '右手握力'], top: 10 },
       xAxis: { type: 'category', data: [] },
       yAxis: { type: 'value', name: '握力 (kg)', min: 0 },
-      series: [
-        { name: '左手握力', type: 'line', data: [], smooth: true, symbol: 'none', lineStyle: { color: '#409EFF', width: 2 } },
-        { name: '右手握力', type: 'line', data: [], smooth: true, symbol: 'none', lineStyle: { color: '#67C23A', width: 2 } }
-      ]
+      // series: [
+      //   { name: '左手握力', type: 'line', data: [], smooth: true, symbol: 'none', lineStyle: { color: '#409EFF', width: 2 } },
+      //   { name: '右手握力', type: 'line', data: [], smooth: true, symbol: 'none', lineStyle: { color: '#67C23A', width: 2 } }
+      // ]
     }
   }
   
@@ -212,20 +300,33 @@ const chartOption = computed(() => {
   const leftSeriesData = []
   const rightSeriesData = []
   
+  // 获取用户选择的日期范围
+  const startDate = new Date(dateRange.value[0])
+  startDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(dateRange.value[1])
+  endDate.setHours(23, 59, 59, 999)
+  
+  console.log('过滤日期范围:', startDate, '至', endDate)
+  
   for (let i = 0; i < dataLength; i++) {
-    // 格式化时间为 MM/dd HH:mm:ss 格式
     const leftItem = leftHistory[i]
     const rightItem = rightHistory[i]
     
     if (leftItem && leftItem.timestamp) {
-      const date = new Date(leftItem.timestamp)
-      const formattedTime = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
+      const itemDate = new Date(leftItem.timestamp)
       
-      allTimes.push(formattedTime)
-      leftSeriesData.push(leftItem.value || 0)
-      rightSeriesData.push(rightItem ? (rightItem.value || 0) : 0)
+      // 只处理在选择日期范围内的数据
+      if (itemDate >= startDate && itemDate <= endDate) {
+        const formattedTime = `${(itemDate.getMonth() + 1).toString().padStart(2, '0')}/${itemDate.getDate().toString().padStart(2, '0')} ${itemDate.getHours().toString().padStart(2, '0')}:${itemDate.getMinutes().toString().padStart(2, '0')}:${itemDate.getSeconds().toString().padStart(2, '0')}`
+        
+        allTimes.push(formattedTime)
+        leftSeriesData.push(leftItem.value || 0)
+        rightSeriesData.push(rightItem ? (rightItem.value || 0) : 0)
+      }
     }
   }
+  
+  console.log('过滤后的数据点数量:', allTimes.length)
   
   // 计算5分钟间隔的标签显示
   const fiveMinuteInterval = Math.max(1, Math.ceil(allTimes.length / 12))
@@ -317,26 +418,34 @@ const chartOption = computed(() => {
     },
     series: [
       {
-        name: '左手握力',
+        name: 'LFY握力',
         type: 'line',
-        data: leftSeriesData,
+        data: lfySeriesData,
         smooth: true,
-        symbol: 'none',
+        symbol: 'circle',
+        symbolSize: 4,
         lineStyle: {
-          color: '#409EFF',
+          color: '#E6A23C',
           width: 2
+        },
+        itemStyle: {
+          color: '#E6A23C'
         },
         connectNulls: false
       },
       {
-        name: '右手握力',
+        name: 'RFY握力',
         type: 'line',
-        data: rightSeriesData,
+        data: rfySeriesData,
         smooth: true,
-        symbol: 'none',
+        symbol: 'circle',
+        symbolSize: 4,
         lineStyle: {
-          color: '#67C23A',
+          color: '#F56C6C',
           width: 2
+        },
+        itemStyle: {
+          color: '#F56C6C'
         },
         connectNulls: false
       }
@@ -432,13 +541,8 @@ const lfyRfyChartOption = computed(() => {
   if (dataLength === 0) {
     return {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['LFY握力', 'RFY握力'], top: 10 },
       xAxis: { type: 'category', data: [] },
       yAxis: { type: 'value', name: '握力 (kg)', min: 0 },
-      series: [
-        { name: 'LFY握力', type: 'line', data: [], smooth: true, symbol: 'none', lineStyle: { color: '#409EFF', width: 2 } },
-        { name: 'RFY握力', type: 'line', data: [], smooth: true, symbol: 'none', lineStyle: { color: '#67C23A', width: 2 } }
-      ]
     }
   }
   
@@ -447,20 +551,33 @@ const lfyRfyChartOption = computed(() => {
   const lfySeriesData = []
   const rfySeriesData = []
   
+  // 获取用户选择的日期范围
+  const startDate = new Date(dateRange.value[0])
+  startDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(dateRange.value[1])
+  endDate.setHours(23, 59, 59, 999)
+  
+  console.log('LFY/RFY过滤日期范围:', startDate, '至', endDate)
+  
   for (let i = 0; i < dataLength; i++) {
-    // 格式化时间为 MM/dd HH:mm:ss 格式
     const lfyItem = lfyHistory[i]
     const rfyItem = rfyHistory[i]
     
     if (lfyItem && lfyItem.timestamp) {
-      const date = new Date(lfyItem.timestamp)
-      const formattedTime = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
+      const itemDate = new Date(lfyItem.timestamp)
       
-      allTimes.push(formattedTime)
-      lfySeriesData.push(lfyItem.value || 0)
-      rfySeriesData.push(rfyItem ? (rfyItem.value || 0) : 0)
+      // 只处理在选择日期范围内的数据
+      if (itemDate >= startDate && itemDate <= endDate) {
+        const formattedTime = `${(itemDate.getMonth() + 1).toString().padStart(2, '0')}/${itemDate.getDate().toString().padStart(2, '0')} ${itemDate.getHours().toString().padStart(2, '0')}:${itemDate.getMinutes().toString().padStart(2, '0')}:${itemDate.getSeconds().toString().padStart(2, '0')}`
+        
+        allTimes.push(formattedTime)
+        lfySeriesData.push(lfyItem.value || 0)
+        rfySeriesData.push(rfyItem ? (rfyItem.value || 0) : 0)
+      }
     }
   }
+  
+  console.log('LFY/RFY过滤后的数据点数量:', allTimes.length)
   
   // 计算5分钟间隔的标签显示
   const fiveMinuteInterval = Math.max(1, Math.ceil(allTimes.length / 12))
@@ -550,32 +667,7 @@ const lfyRfyChartOption = computed(() => {
         }
       }
     },
-    series: [
-      {
-        name: 'LFY握力',
-        type: 'line',
-        data: lfySeriesData,
-        smooth: true,
-        symbol: 'none',
-        lineStyle: {
-          color: '#409EFF',
-          width: 2
-        },
-        connectNulls: false
-      },
-      {
-        name: 'RFY握力',
-        type: 'line',
-        data: rfySeriesData,
-        smooth: true,
-        symbol: 'none',
-        lineStyle: {
-          color: '#67C23A',
-          width: 2
-        },
-        connectNulls: false
-      }
-    ],
+    
     dataZoom: [
       {
         type: 'slider',
@@ -680,20 +772,33 @@ const lfzRfzChartOption = computed(() => {
   const lfzSeriesData = []
   const rfzSeriesData = []
   
+  // 获取用户选择的日期范围
+  const startDate = new Date(dateRange.value[0])
+  startDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(dateRange.value[1])
+  endDate.setHours(23, 59, 59, 999)
+  
+  console.log('LFZ/RFZ过滤日期范围:', startDate, '至', endDate)
+  
   for (let i = 0; i < dataLength; i++) {
-    // 格式化时间为 MM/dd HH:mm:ss 格式
     const lfzItem = lfzHistory[i]
     const rfzItem = rfzHistory[i]
     
     if (lfzItem && lfzItem.timestamp) {
-      const date = new Date(lfzItem.timestamp)
-      const formattedTime = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
+      const itemDate = new Date(lfzItem.timestamp)
       
-      allTimes.push(formattedTime)
-      lfzSeriesData.push(lfzItem.value || 0)
-      rfzSeriesData.push(rfzItem ? (rfzItem.value || 0) : 0)
+      // 只处理在选择日期范围内的数据
+      if (itemDate >= startDate && itemDate <= endDate) {
+        const formattedTime = `${(itemDate.getMonth() + 1).toString().padStart(2, '0')}/${itemDate.getDate().toString().padStart(2, '0')} ${itemDate.getHours().toString().padStart(2, '0')}:${itemDate.getMinutes().toString().padStart(2, '0')}:${itemDate.getSeconds().toString().padStart(2, '0')}`
+        
+        allTimes.push(formattedTime)
+        lfzSeriesData.push(lfzItem.value || 0)
+        rfzSeriesData.push(rfzItem ? (rfzItem.value || 0) : 0)
+      }
     }
   }
+  
+  console.log('LFZ/RFZ过滤后的数据点数量:', allTimes.length)
   
   // 计算5分钟间隔的标签显示
   const fiveMinuteInterval = Math.max(1, Math.ceil(allTimes.length / 12))
@@ -1096,6 +1201,15 @@ const lfzRfzChartOption = computed(() => {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 2px solid #f1f3f4;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .chart-header h2 {
