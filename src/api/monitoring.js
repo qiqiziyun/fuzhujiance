@@ -256,31 +256,63 @@ export const getSpeedData = async (params = {}) => {
 }
 
 // 获取GPS位置数据
-export const getGPSData = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // 模拟GPS数据（以北京为中心）
-      const baseLatitude = 39.9042
-      const baseLongitude = 116.4074
+export const getGPSData = async () => {
+  try {
+    // 调用新的GPS位置API接口
+    const response = await request.get('/gps/location')
+    console.log('后端返回的GPS数据:', response)
 
-      const data = {
-        current: {
-          latitude: baseLatitude + (Math.random() - 0.5) * 0.01,
-          longitude: baseLongitude + (Math.random() - 0.5) * 0.01,
-          accuracy: Math.floor(Math.random() * 10) + 3, // 3-13米
-          timestamp: Date.now()
-        },
-        track: Array.from({ length: 20 }, (_, i) => ({
-          latitude: baseLatitude + (Math.random() - 0.5) * 0.02,
-          longitude: baseLongitude + (Math.random() - 0.5) * 0.02,
-          timestamp: Date.now() - (20 - i) * 300000 // 5分钟间隔
-        })),
-        address: '北京市朝阳区某某街道',
-        status: Math.random() > 0.1 ? 'connected' : 'disconnected'
-      }
-      resolve(data)
-    }, 300)
-  })
+    // 检查响应数据
+    if (!response) {
+      console.error('后端返回GPS数据为空')
+      throw new Error('后端返回GPS数据为空')
+    }
+
+    // 处理返回的数据格式
+    let locationData = response
+    if (response.data) {
+      locationData = response.data
+    }
+
+    // 返回标准化的GPS数据格式
+    return {
+      current: {
+        latitude: locationData.latitude || 0,
+        longitude: locationData.longitude || 0,
+        accuracy: locationData.accuracy || 0,
+        altitude: locationData.altitude || 0,
+        speed: locationData.speed || 0,
+        bearing: locationData.bearing || 0,
+        timestamp: locationData.timestamp || Date.now()
+      },
+      status: {
+        signal: 'good',
+        signalBars: 4,
+        satelliteCount: 12
+      },
+      distance: locationData.todayDistance || 0
+    }
+  } catch (error) {
+    console.error('获取GPS数据失败:', error)
+    // 返回默认数据以防止页面崩溃
+    return {
+      current: {
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0,
+        altitude: 0,
+        speed: 0,
+        bearing: 0,
+        timestamp: Date.now()
+      },
+      status: {
+        signal: 'poor',
+        signalBars: 1,
+        satelliteCount: 0
+      },
+      distance: 0
+    }
+  }
 }
 
 // 获取传感器数据
@@ -666,6 +698,61 @@ export const getLfzRfzGripData = async () => {
       lfz: { current: 0, average: 0, max: 0, history: [], status: 'error' },
       rfz: { current: 0, average: 0, max: 0, history: [], status: 'error' },
       combined: { current: 0, average: 0, max: 0, status: 'error' }
+    }
+  }
+}
+
+// 获取当前速度数据
+export const getCurrentSpeedData = async () => {
+  try {
+    const response = await request.get('/speed/current')
+    console.log('后端返回的当前速度数据:', response)
+
+    // 检查响应数据
+    if (!response) {
+      console.error('后端返回当前速度数据为空')
+      throw new Error('后端返回当前速度数据为空')
+    }
+
+    // 处理返回的数据格式
+    let speedData = response
+    if (response.data) {
+      speedData = response.data
+    }
+
+    // 解析后端返回的具体字段
+    const currentSpeed = Number(speedData.speed_rpm || speedData.speed || speedData.velocity || speedData.value || 0)
+
+    // 处理时间戳
+    let timestamp = Date.now()
+    if (speedData.time_str) {
+      // 如果有time_str，构造今天的完整时间
+      const today = new Date().toISOString().split('T')[0]
+      const fullTimeStr = `${today}T${speedData.time_str}`
+      timestamp = new Date(fullTimeStr).getTime()
+    } else if (speedData.timestamp || speedData.time) {
+      timestamp = new Date(speedData.timestamp || speedData.time).getTime()
+    }
+
+    console.log('解析后的速度数据:', {
+      current: currentSpeed,
+      timestamp: timestamp,
+      originalData: speedData
+    })
+
+    // 返回标准化的速度数据格式
+    return {
+      current: currentSpeed,
+      timestamp: timestamp,
+      status: speedData.status || 'normal'
+    }
+  } catch (error) {
+    console.error('获取当前速度数据失败:', error)
+    // 返回默认数据以防止页面崩溃
+    return {
+      current: 0,
+      timestamp: Date.now(),
+      status: 'error'
     }
   }
 }

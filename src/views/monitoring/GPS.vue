@@ -18,27 +18,7 @@
           </div>
         </div>
       </div>
-      
-      <div class="gps-card movement">
-        <div class="card-header">
-          <h3>移动信息</h3>
-          <span class="update-time">{{ formatTime(currentLocation.timestamp) }}</span>
-        </div>
-        <div class="movement-info">
-          <div class="movement-item">
-            <span class="movement-label">当前速度:</span>
-            <span class="movement-value">{{ (currentLocation.speed || 0).toFixed(1) }} km/h</span>
-          </div>
-          <div class="movement-item">
-            <span class="movement-label">移动方向:</span>
-            <span class="movement-value">{{ getDirection(currentLocation.bearing) }}</span>
-          </div>
-          <div class="movement-item">
-            <span class="movement-label">今日距离:</span>
-            <span class="movement-value">{{ (todayDistance || 0).toFixed(2) }} km</span>
-          </div>
-        </div>
-      </div>
+
     </div>
     
     <!-- 地图显示 -->
@@ -421,7 +401,7 @@ onMounted(() => {
   // 每30秒更新一次数据
   updateTimer = setInterval(() => {
     loadGPSData()
-  }, 30000)
+  }, 30000) // 30000毫秒 = 30秒
 })
 
 // 组件卸载时

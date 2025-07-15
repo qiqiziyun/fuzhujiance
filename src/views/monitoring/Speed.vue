@@ -2,18 +2,18 @@
   <div class="speed-monitoring">
     <!-- 速度概览 -->
     <div class="speed-overview">
+      <!-- 当前速度卡片 -->
       <div class="speed-card current">
         <div class="card-header">
           <h3>当前速度</h3>
-          <div class="speed-status" :class="getSpeedStatus(currentSpeed)"></div>
+          <div class="status-indicator" :class="currentSpeed > 0 ? 'active' : 'inactive'"></div>
         </div>
-        <div class="speed-display">
-          <div class="speed-value">{{ (currentSpeed || 0).toFixed(1) }}</div>
-          <div class="speed-unit">m/s</div>
+        <div class="speed-value">
+          <span class="value">{{ currentSpeed.toFixed(1) }}</span>
+          <span class="unit">m/s</span>
         </div>
-        <div class="speed-info">
-          <span class="speed-desc">{{ getSpeedDescription(currentSpeed) }}</span>
-        </div>
+        <!-- <div class="speed-status">{{ currentSpeed > 10 ? '很快' : currentSpeed > 5 ? '中等' : '缓慢' }}</div> -->
+        <div class="last-update">最后更新: {{ lastUpdateTime }}</div>
       </div>
       
       <div class="speed-card stats">
@@ -87,7 +87,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { TrendCharts } from '@element-plus/icons-vue'
-import { getSpeedData } from '@/api/monitoring'
+import { getSpeedData, getCurrentSpeedData } from '@/api/monitoring'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
@@ -113,6 +113,8 @@ use([
 
 // 当前速度
 const currentSpeed = ref(2.3)
+// 添加缺少的变量
+const lastUpdateTime = ref('')
 
 // 速度统计
 const maxSpeed = ref(8.5)
@@ -168,38 +170,6 @@ const pickerOptions = {
     }
   }
 }
-
-// 日期快捷选项
-// 删除整个 dateShortcuts 配置
-// const dateShortcuts = [
-//   {
-//     text: '最近7天',
-//     value: () => {
-//       const end = new Date()
-//       const start = new Date()
-//       start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
-//       return [start, end]
-//     }
-//   },
-//   {
-//     text: '最近30天',
-//     value: () => {
-//       const end = new Date()
-//       const start = new Date()
-//       start.setTime(start.getTime() - 3600 * 1000 * 24 * 30)
-//       return [start, end]
-//     }
-//   },
-//   {
-//     text: '最近3个月',
-//     value: () => {
-//       const end = new Date()
-//       const start = new Date()
-//       start.setTime(start.getTime() - 3600 * 1000 * 24 * 90)
-//       return [start, end]
-//     }
-//   }
-// ]
 
 // 速度历史数据（用于图表显示）
 const speedHistory = ref([])
@@ -418,42 +388,53 @@ const formatDuration = (seconds) => {
   return `${hours}h ${minutes}m`
 }
 
-// 修改加载速度数据函数，支持日期范围参数
 const loadSpeedData = async () => {
   try {
-    chartLoading.value = true
-    // 传递日期范围参数给API
-    const params = {
+    loading.value = true
+    
+    // 获取历史数据（用于图表显示）
+    const historyData = await getSpeedData({
       startDate: dateRange.value[0],
       endDate: dateRange.value[1]
-    }
-    const data = await getSpeedData(params)
-    if (data) {
-      // 确保所有数值都是数字类型
-      currentSpeed.value = Number(data.current) || 0
-      maxSpeed.value = Number(data.max) || 0
-      avgSpeed.value = Number(data.average) || 0
-      totalDistance.value = Number(data.distance) || 0
-      totalTime.value = Number(data.duration) || 0
-      if (data.history && Array.isArray(data.history)) {
-        // 用于图表显示的历史数据
-        speedHistory.value = data.history
-      }
-      lastUpdate.value = Date.now()
-    }
+    })
+    
+    // 获取当前最新速度数据
+    const currentData = await getCurrentSpeedData()
+    
+    // 更新历史数据
+    speedHistory.value = historyData.history || []
+    
+    // 更新当前速度显示
+    currentSpeed.value = currentData.current
+    lastUpdateTime.value = new Date(currentData.timestamp).toLocaleString('zh-CN')
+    
+    console.log('速度数据加载完成:', {
+      historyCount: speedHistory.value.length,
+      currentSpeed: currentSpeed.value,
+      updateTime: lastUpdateTime.value
+    })
   } catch (error) {
     console.error('加载速度数据失败:', error)
-    ElMessage.error('加载速度数据失败，请检查网络连接')
-    // 确保在错误情况下也有默认的数字值
-    currentSpeed.value = 0
-    maxSpeed.value = 0
-    avgSpeed.value = 0
-    totalDistance.value = 0
-    totalTime.value = 0
   } finally {
-    chartLoading.value = false
+    loading.value = false
   }
 }
+
+// 修改定时器设置为每1秒刷新
+onMounted(() => {
+  loadSpeedData()
+  // 每1秒自动刷新当前速度数据
+  updateTimer = setInterval(async () => {
+    try {
+      // 只获取当前速度，不重新加载历史数据
+      const currentData = await getCurrentSpeedData()
+      currentSpeed.value = currentData.current
+      lastUpdateTime.value = new Date(currentData.timestamp).toLocaleString('zh-CN')
+    } catch (error) {
+      console.error('刷新当前速度失败:', error)
+    }
+  }, 1000) // 1秒 = 1000毫秒
+})
 
 // 查询按钮点击处理
 const handleQuery = () => {
@@ -464,15 +445,6 @@ const handleQuery = () => {
     ElMessage.warning('请选择有效的日期范围')
   }
 }
-
-// 组件挂载时初始化
-onMounted(() => {
-  loadSpeedData()
-  // 每10分钟自动刷新数据
-  updateTimer = setInterval(() => {
-    loadSpeedData()
-  }, 600000) // 10分钟 = 10 * 60 * 1000 = 600000毫秒
-})
 
 // 在组件卸载时清理定时器和事件监听器
 onUnmounted(() => {
