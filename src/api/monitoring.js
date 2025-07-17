@@ -153,104 +153,68 @@ export const getPostureAngleData = () => {
 
 // 获取速度数据
 // 获取速度数据 - 修改为使用新的查询接口
+// 在 getSpeedData 函数中，优化时间处理部分
 export const getSpeedData = async (params = {}) => {
   try {
-    // 使用新的查询接口
-    const response = await request.get('/speed/query', {
+    console.log('发送到后端的查询参数:', params)
+
+    // request.js 的响应拦截器已经处理了 {code: 200, data: [...]} 格式
+    // 直接返回的就是 data 部分
+    const speedData = await request.get('/speed/query', {
       params: {
         startDate: params.startDate,
         endDate: params.endDate
       }
     })
 
-    console.log('后端返回的速度查询数据:', response)
+    console.log('后端返回的速度查询数据:', speedData)
 
-    // 检查数据格式
-    if (!response) {
-      console.error('后端返回数据为空')
-      throw new Error('后端返回数据为空')
-    }
+    // speedData 现在直接就是数组数据，不需要再检查 code 和 data
+    const dataArray = Array.isArray(speedData) ? speedData : []
+    
+    console.log('原始数据数组长度:', dataArray.length)
+    console.log('原始数据前5项:', dataArray.slice(0, 5))
 
-    let speedData = response
-    // 如果响应包装在data字段中
-    if (response.data && Array.isArray(response.data)) {
-      speedData = response.data
-    } else if (!Array.isArray(response)) {
-      console.error('后端返回的数据不是数组格式:', response)
-      throw new Error('数据格式错误')
-    }
-
-    if (speedData.length === 0) {
-      return {
-        current: 0,
-        average: 0,
-        max: 0,
-        distance: 0,
-        duration: 0,
-        history: [],
-        status: 'normal'
+    // 按照您的要求：不对数据进行任何处理，直接展示
+    const formattedData = dataArray.map((item, index) => {
+      // 处理时间字段
+      let datetime
+      if (item.date && item.time) {
+        datetime = `${item.date} ${item.time}`
+      } else if (item.time) {
+        datetime = item.time
+      } else if (item.timestamp) {
+        datetime = item.timestamp
+      } else if (item.createTime) {
+        datetime = item.createTime
+      } else {
+        // 如果没有时间字段，生成一个时间
+        const now = new Date()
+        datetime = new Date(now.getTime() + index * 1000).toISOString().replace('T', ' ').substring(0, 19)
       }
-    }
 
-    // 按时间排序
-    const sortedData = speedData.sort((a, b) => {
-      const timeA = new Date(a.time || a.timestamp || a.createTime || 0).getTime()
-      const timeB = new Date(b.time || b.timestamp || b.createTime || 0).getTime()
-      return timeA - timeB
-    })
-
-    console.log(`处理速度数据，共 ${sortedData.length} 条`)
-
-    // 计算统计数据
-    const speeds = sortedData.map(item => {
-      // 兼容不同的字段名
-      return Number(item.speed || item.velocity || item.value || 0)
-    })
-
-    const current = speeds.length > 0 ? speeds[speeds.length - 1] : 0
-    const average = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0
-    const max = speeds.length > 0 ? Math.max(...speeds) : 0
-
-    // 转换数据格式以适配前端图表组件
-    const history = sortedData.map(item => {
-      const timestamp = item.time || item.timestamp || item.createTime || new Date().toISOString()
       return {
-        timestamp: timestamp,
+        datetime: datetime,
         speed: Number(item.speed || item.velocity || item.value || 0),
-        time: new Date(timestamp).getTime()
+        originalData: item // 保留原始数据
       }
     })
 
-    // 计算总距离和总时长
-    let totalDistance = 0
-    let totalDuration = 0
-
-    if (history.length > 1) {
-      // 计算总时长（最后时间 - 第一时间）
-      totalDuration = (history[history.length - 1].time - history[0].time) / 1000 // 转换为秒
-      // 简单估算总距离（平均速度 * 时间）
-      totalDistance = (average * totalDuration) / 3600 // 转换为公里
-    }
+    console.log('格式化后数据长度:', formattedData.length)
+    console.log('格式化后数据前3项:', formattedData.slice(0, 3))
 
     return {
-      current,
-      average,
-      max,
-      distance: totalDistance,
-      duration: totalDuration,
-      history,
-      status: 'normal'
+      success: true,
+      data: formattedData,
+      total: formattedData.length
     }
   } catch (error) {
     console.error('获取速度数据失败:', error)
     return {
-      current: 0,
-      average: 0,
-      max: 0,
-      distance: 0,
-      duration: 0,
-      history: [],
-      status: 'error'
+      success: false,
+      data: [],
+      total: 0,
+      error: error.message
     }
   }
 }

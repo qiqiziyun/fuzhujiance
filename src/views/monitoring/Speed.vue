@@ -183,38 +183,51 @@ const chartLoading = ref(false)
 
 // 图表配置
 const chartOption = computed(() => {
-  console.log('speedHistory数据:', speedHistory.value)
+  console.log('重新计算图表配置，speedHistory数据点数量:', speedHistory.value.length)
   
-  // 处理历史数据
+  // 直接使用后端数据，不进行复杂处理
   const times = []
   const speeds = []
   
   if (speedHistory.value && speedHistory.value.length > 0) {
     speedHistory.value.forEach(item => {
-      if (item.timestamp && (item.speed !== undefined || item.velocity !== undefined || item.value !== undefined)) {
-        times.push(formatTime(item.timestamp))
-        const speedValue = item.speed || item.velocity || item.value || 0
-        speeds.push(Number(speedValue))
+      if (item.datetime && item.speed !== undefined) {
+        times.push(item.datetime) // 直接使用完整的日期时间
+        speeds.push(Number(item.speed))
       }
     })
   }
   
-  // 计算标签间隔（每5分钟显示一个标签）
-  const labelInterval = Math.max(1, Math.ceil(times.length / 12))
-  console.log('标签间隔设置:', labelInterval)
+  console.log('图表数据:', {
+    时间点数量: times.length,
+    速度点数量: speeds.length,
+    第一个时间: times[0],
+    最后一个时间: times[times.length - 1],
+    速度范围: speeds.length > 0 ? [Math.min(...speeds), Math.max(...speeds)] : [0, 0]
+  })
+  
+  // 动态设置Y轴范围
+  const minSpeed = speeds.length > 0 ? Math.min(...speeds) : 0
+  const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 10
+  const yAxisMin = Math.max(0, minSpeed - 1)
+  const yAxisMax = maxSpeed + 2
   
   return {
     tooltip: {
       trigger: 'axis',
       formatter: function(params) {
-        const data = params[0]
-        return `时间: ${data.name}<br/>速度: ${data.value} m/s`
+        if (params && params.length > 0) {
+          const data = params[0]
+          return `时间: ${data.name}<br/>速度: ${data.value} m/s`
+        }
+        return ''
       }
     },
     grid: {
-      left: '8%',
+      left: '10%',
       right: '4%',
-      bottom: '18%',
+      bottom: '20%',
+      top: '10%',
       containLabel: true
     },
     xAxis: {
@@ -222,70 +235,51 @@ const chartOption = computed(() => {
       data: times,
       axisLabel: {
         rotate: 45,
-        fontSize: 14,
+        fontSize: 10,
         color: '#303133',
         margin: 15,
-        fontWeight: 'bold',
-        fontFamily: 'Arial, sans-serif',
-        interval: labelInterval - 1,
-        formatter: function(value, index) {
+        interval: 'auto', // 自动计算间隔
+        formatter: function(value) {
+          // 显示完整的日期时间
           return value || ''
         }
       },
       axisTick: {
         alignWithLabel: true,
-        show: true,
-        length: 6,
-        lineStyle: {
-          color: '#303133',
-          width: 2
-        }
+        show: true
       },
       axisLine: {
         show: true,
         lineStyle: {
-          color: '#303133',
-          width: 2
+          color: '#303133'
         }
       }
     },
     yAxis: {
       type: 'value',
       name: '速度 (m/s)',
+      min: yAxisMin,
+      max: yAxisMax,
       nameTextStyle: {
         color: '#303133',
         fontSize: 14,
-        fontWeight: 'bold',
-        padding: [0, 0, 0, 20]
+        fontWeight: 'bold'
       },
       axisLabel: {
         formatter: '{value}',
-        fontSize: 14,
-        color: '#303133',
-        margin: 18,
-        fontWeight: 'bold',
-        fontFamily: 'Arial, sans-serif'
+        fontSize: 12,
+        color: '#303133'
       },
       axisLine: {
         show: true,
         lineStyle: {
-          color: '#303133',
-          width: 2
-        }
-      },
-      axisTick: {
-        show: true,
-        length: 6,
-        lineStyle: {
-          color: '#303133',
-          width: 2
+          color: '#303133'
         }
       },
       splitLine: {
         lineStyle: {
           color: '#E4E7ED',
-          type: 'dashed',
-          width: 1
+          type: 'dashed'
         }
       }
     },
@@ -294,7 +288,9 @@ const chartOption = computed(() => {
         name: '速度',
         type: 'line',
         data: speeds,
-        smooth: true,
+        smooth: false,
+        symbol: 'circle',
+        symbolSize: 3,
         lineStyle: {
           color: '#409EFF',
           width: 2
@@ -332,7 +328,8 @@ const chartOption = computed(() => {
       {
         start: 0,
         end: 100,
-        height: 30
+        height: 30,
+        bottom: 10
       }
     ]
   }
@@ -390,33 +387,53 @@ const formatDuration = (seconds) => {
 
 const loadSpeedData = async () => {
   try {
-    loading.value = true
+    chartLoading.value = true
     
-    // 获取历史数据（用于图表显示）
-    const historyData = await getSpeedData({
+    console.log('开始加载速度数据，日期范围:', dateRange.value)
+    
+    // 获取后端数据
+    const result = await getSpeedData({
       startDate: dateRange.value[0],
       endDate: dateRange.value[1]
     })
     
-    // 获取当前最新速度数据
-    const currentData = await getCurrentSpeedData()
+    console.log('API返回结果:', result)
     
-    // 更新历史数据
-    speedHistory.value = historyData.history || []
+    if (result.success && result.data) {
+      // 直接使用后端返回的数据，不进行复杂处理
+      speedHistory.value = result.data
+      
+      console.log('直接设置speedHistory:', speedHistory.value.length, '个数据点')
+      console.log('前3个数据点:', speedHistory.value.slice(0, 3))
+      
+      // 简单统计（可选）
+      if (speedHistory.value.length > 0) {
+        const speeds = speedHistory.value.map(item => item.speed)
+        currentSpeed.value = speeds[speeds.length - 1] || 0
+        maxSpeed.value = Math.max(...speeds)
+        avgSpeed.value = speeds.reduce((a, b) => a + b, 0) / speeds.length
+      }
+      
+      // 更新最后更新时间
+      lastUpdateTime.value = new Date().toLocaleString('zh-CN')
+      
+      if (speedHistory.value.length === 0) {
+        ElMessage.info('选择的时间范围内没有速度数据')
+      } else {
+        ElMessage.success(`成功加载 ${speedHistory.value.length} 个数据点`)
+      }
+    } else {
+      console.error('获取数据失败:', result.error)
+      speedHistory.value = []
+      ElMessage.error('获取数据失败: ' + (result.error || '未知错误'))
+    }
     
-    // 更新当前速度显示
-    currentSpeed.value = currentData.current
-    lastUpdateTime.value = new Date(currentData.timestamp).toLocaleString('zh-CN')
-    
-    console.log('速度数据加载完成:', {
-      historyCount: speedHistory.value.length,
-      currentSpeed: currentSpeed.value,
-      updateTime: lastUpdateTime.value
-    })
   } catch (error) {
     console.error('加载速度数据失败:', error)
+    ElMessage.error('加载速度数据失败: ' + error.message)
+    speedHistory.value = []
   } finally {
-    loading.value = false
+    chartLoading.value = false
   }
 }
 
@@ -437,10 +454,26 @@ onMounted(() => {
 })
 
 // 查询按钮点击处理
-const handleQuery = () => {
+const handleQuery = async () => {
   if (dateRange.value && dateRange.value.length === 2) {
-    console.log('查询日期范围:', dateRange.value)
-    loadSpeedData()
+    console.log('开始查询，日期范围:', dateRange.value)
+    
+    // 验证日期范围
+    const startDate = new Date(dateRange.value[0])
+    const endDate = new Date(dateRange.value[1])
+    const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24))
+    
+    if (diffDays > 15) {
+      ElMessage.warning('查询范围不能超过15天')
+      return
+    }
+    
+    if (startDate > endDate) {
+      ElMessage.warning('开始日期不能晚于结束日期')
+      return
+    }
+    
+    await loadSpeedData()
   } else {
     ElMessage.warning('请选择有效的日期范围')
   }
