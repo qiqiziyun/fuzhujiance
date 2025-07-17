@@ -10,144 +10,70 @@
         <div class="coordinate-info">
           <div class="coordinate-item">
             <span class="coord-label">纬度:</span>
-            <span class="coord-value">{{ currentLocation.latitude ? currentLocation.latitude.toFixed(6) : '0.000000' }}°</span>
+            <span class="coord-value">
+              {{ currentLocation.latitude ? currentLocation.latitude.toFixed(6) + '°' : '无数据' }}
+            </span>
           </div>
           <div class="coordinate-item">
             <span class="coord-label">经度:</span>
-            <span class="coord-value">{{ currentLocation.longitude ? currentLocation.longitude.toFixed(6) : '0.000000' }}°</span>
+            <span class="coord-value">
+              {{ currentLocation.longitude ? currentLocation.longitude.toFixed(6) + '°' : '无数据' }}
+            </span>
           </div>
         </div>
       </div>
-
     </div>
     
-    <!-- 地图显示 -->
+    <!-- 百度地图显示 -->
     <div class="map-section">
       <div class="map-header">
-        <h2>位置地图</h2>
+        <h2>实时位置地图</h2>
         <div class="map-controls">
           <el-button size="small" @click="refreshLocation" :icon="Refresh">刷新位置</el-button>
           <el-button size="small" @click="centerToCurrentLocation" :icon="Aim">定位</el-button>
         </div>
       </div>
       
-      <div class="map-container" ref="mapContainer">
-        <!-- 地图显示区域 -->
-        <div class="map-display">
-          <!-- 地图背景 -->
-          <div class="map-background">
-            <!-- 道路网格 -->
-            <div class="road-network">
-              <div class="road horizontal road-1"></div>
-              <div class="road horizontal road-2"></div>
-              <div class="road vertical road-3"></div>
-              <div class="road vertical road-4"></div>
+      <!-- 百度地图容器 -->
+      <div class="map-container">
+        <div id="baiduMap" class="baidu-map"></div>
+        
+        <!-- 位置信息覆盖层 -->
+        <div class="map-info-overlay" v-if="currentLocation.latitude">
+          <div class="location-info">
+            <div class="location-name">{{ locationName }}</div>
+            <div class="location-coords">
+              {{ currentLocation.latitude.toFixed(4) }}, {{ currentLocation.longitude.toFixed(4) }}
             </div>
-            
-            <!-- 区域块 -->
-            <div class="area-block area-1"></div>
-            <div class="area-block area-2"></div>
-            <div class="area-block area-3"></div>
-            <div class="area-block area-4"></div>
-            
-            <!-- 位置标记 -->
-            <div class="location-marker">
-              <div class="marker-pin">
-                <el-icon class="marker-icon"><Location /></el-icon>
-              </div>
-              <div class="marker-label">
-                 <div class="label-text">{{ locationName }}</div>
-               </div>
-            </div>
-            
-            <!-- 坐标信息 -->
-            <div class="map-coordinates">
-              <div class="coord-display">
-                {{ currentLocation.latitude ? currentLocation.latitude.toFixed(4) : '0.0000' }}, 
-                {{ currentLocation.longitude ? currentLocation.longitude.toFixed(4) : '0.0000' }}
-              </div>
-              <div class="accuracy-display">精度: ±{{ currentLocation.accuracy }}m</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- 历史轨迹 -->
-    <div class="history-section" v-if="mapMode === 'track'">
-      <div class="history-header">
-        <h2>历史轨迹</h2>
-        <div class="time-filter">
-          <el-date-picker
-            v-model="trackDateRange"
-            type="datetimerange"
-            range-separator="至"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
-            size="small"
-            @change="loadTrackHistory"
-          />
-        </div>
-      </div>
-      
-      <div class="history-content">
-        <div class="history-stats">
-          <div class="stat-item">
-            <div class="stat-value">{{ trackStats.totalDistance }}</div>
-            <div class="stat-label">总距离 (km)</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ trackStats.totalTime }}</div>
-            <div class="stat-label">总时长</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ trackStats.avgSpeed }}</div>
-            <div class="stat-label">平均速度 (km/h)</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">{{ trackStats.maxSpeed }}</div>
-            <div class="stat-label">最高速度 (km/h)</div>
+            <div class="location-time">更新时间: {{ formatTime(currentLocation.timestamp) }}</div>
           </div>
         </div>
         
-        <div class="history-timeline">
-          <h3>轨迹时间线</h3>
-          <div class="timeline-container">
-            <div v-for="point in trackHistory" :key="point.id" class="timeline-item">
-              <div class="timeline-time">{{ formatTime(point.timestamp) }}</div>
-              <div class="timeline-location">
-                <div class="location-coords">{{ point.latitude.toFixed(4) }}, {{ point.longitude.toFixed(4) }}</div>
-                <div class="location-speed">速度: {{ point.speed }} km/h</div>
-              </div>
-              <div class="timeline-marker"></div>
-            </div>
+        <!-- 无数据提示 -->
+        <div class="no-data-overlay" v-else>
+          <div class="no-data-content">
+            <el-icon class="no-data-icon"><LocationInformation /></el-icon>
+            <div class="no-data-text">{{ locationName }}</div>
+            <div class="no-data-desc">等待GPS数据...</div>
           </div>
         </div>
       </div>
     </div>
-    
-
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
   Location,
   Aim,
-  Refresh
+  Refresh,
+  LocationInformation
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getGPSData } from '@/api/monitoring'
 
-// GPS状态
-const gpsStatus = ref({
-  signal: 'good',
-  signalBars: 4,
-  satelliteCount: 12
-})
-
-// 当前位置 - 删除硬编码坐标，改为空值或默认值
+// 当前位置
 const currentLocation = ref({
   latitude: null,
   longitude: null,
@@ -158,214 +84,126 @@ const currentLocation = ref({
   timestamp: Date.now()
 })
 
-// 今日距离
-const todayDistance = ref(2.1)
+// 位置名称
+const locationName = ref('等待GPS数据...')
 
-
-
-// 地图模式
-const mapMode = ref('current')
-
-// 地图容器引用
-const mapContainer = ref(null)
-
-// 轨迹相关数据
-const trackDateRange = ref(null)
-const trackStats = ref({
-  totalDistance: '8.6',
-  totalTime: '4h 5m',
-  avgSpeed: '2.1',
-  maxSpeed: '5.8'
-})
-
-const trackHistory = ref([])
-
-// 定时器
+// 百度地图相关
+let baiduMap = null
+let currentMarker = null
 let updateTimer = null
-let watchId = null
 
-// 位置名称状态
-const locationName = ref('获取位置中...')
+// 初始化百度地图
+const initBaiduMap = () => {
+  if (typeof BMap === 'undefined') {
+    ElMessage.error('百度地图API未加载，请检查网络连接')
+    return
+  }
 
-// 高德地图逆地理编码API
-const getLocationName = async (lat, lng) => {
   try {
-    // 注意：需要替换YOUR_AMAP_KEY为真实的高德地图API密钥
-    // 申请地址：https://console.amap.com/dev/key/app
-    const AMAP_KEY = 'YOUR_AMAP_KEY'; // 请替换为真实的API密钥
+    // 创建地图实例
+    baiduMap = new BMap.Map('baiduMap')
     
-    if (AMAP_KEY === 'YOUR_AMAP_KEY') {
-      // 临时演示：根据坐标范围判断位置
-      if (lat >= 30.270 && lat <= 30.320 && lng >= 120.140 && lng <= 120.360) {
-         locationName.value = '浙江理工大学（下沙校区）';
-      } else if (lat >= 30.200 && lat <= 30.400 && lng >= 120.000 && lng <= 120.300) {
-        locationName.value = '杭州市';
-      } else {
-        locationName.value = `位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-      }
-      return;
+    // 设置默认中心点（如果没有GPS数据）
+    const defaultPoint = new BMap.Point(120.1551, 30.2741) // 杭州
+    baiduMap.centerAndZoom(defaultPoint, 15)
+    
+    // 启用滚轮缩放
+    baiduMap.enableScrollWheelZoom(true)
+    
+    // 添加控件
+    baiduMap.addControl(new BMap.NavigationControl())
+    baiduMap.addControl(new BMap.ScaleControl())
+    baiduMap.addControl(new BMap.OverviewMapControl())
+    baiduMap.addControl(new BMap.MapTypeControl())
+    
+    console.log('百度地图初始化成功')
+  } catch (error) {
+    console.error('百度地图初始化失败:', error)
+    ElMessage.error('地图初始化失败')
+  }
+}
+
+// 更新地图位置
+const updateMapLocation = (lat, lng) => {
+  if (!baiduMap || !lat || !lng) {
+    return
+  }
+
+  try {
+    const point = new BMap.Point(lng, lat)
+    
+    // 移除旧标记
+    if (currentMarker) {
+      baiduMap.removeOverlay(currentMarker)
     }
     
-    const response = await fetch(`https://restapi.amap.com/v3/geocode/regeo?output=json&location=${lng},${lat}&key=${AMAP_KEY}&radius=1000&extensions=all`)
-    const data = await response.json()
+    // 创建新标记
+    currentMarker = new BMap.Marker(point)
+    baiduMap.addOverlay(currentMarker)
     
-    if (data.status === '1' && data.regeocode) {
-      const address = data.regeocode.formatted_address
-      const poi = data.regeocode.pois && data.regeocode.pois[0]
-      
-      if (poi && poi.name) {
-        locationName.value = poi.name
+    // 创建信息窗口
+    const infoWindow = new BMap.InfoWindow(`
+      <div style="padding: 10px; min-width: 200px;">
+        <h4 style="margin: 0 0 8px 0; color: #333;">${locationName.value}</h4>
+        <p style="margin: 4px 0; color: #666;">纬度: ${lat.toFixed(6)}°</p>
+        <p style="margin: 4px 0; color: #666;">经度: ${lng.toFixed(6)}°</p>
+        <p style="margin: 4px 0; color: #666;">精度: ±${currentLocation.value.accuracy}m</p>
+        <p style="margin: 4px 0; color: #666;">速度: ${currentLocation.value.speed.toFixed(1)} m/s</p>
+        <p style="margin: 4px 0 0 0; color: #999; font-size: 12px;">更新时间: ${formatTime(currentLocation.value.timestamp)}</p>
+      </div>
+    `)
+    
+    // 标记点击事件
+    currentMarker.addEventListener('click', () => {
+      baiduMap.openInfoWindow(infoWindow, point)
+    })
+    
+    // 移动地图中心到当前位置
+    baiduMap.panTo(point)
+    
+    console.log('地图位置更新成功:', lat, lng)
+  } catch (error) {
+    console.error('更新地图位置失败:', error)
+  }
+}
+
+// 获取位置名称（百度地图逆地理编码）
+const getLocationName = async (lat, lng) => {
+  if (!lat || !lng || typeof BMap === 'undefined') {
+    return
+  }
+
+  try {
+    const point = new BMap.Point(lng, lat)
+    const geocoder = new BMap.Geocoder()
+    
+    geocoder.getLocation(point, (result) => {
+      if (result) {
+        locationName.value = result.address || `位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+        console.log('获取位置名称成功:', result.address)
       } else {
-        locationName.value = address || '未知位置'
+        locationName.value = `位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
       }
-    } else {
-      locationName.value = '未知位置'
-    }
+    })
   } catch (error) {
     console.error('获取位置名称失败:', error)
-    locationName.value = '位置解析失败'
+    locationName.value = `位置 (${lat.toFixed(4)}, ${lng.toFixed(4)})`
   }
 }
 
-// 获取浏览器地理位置
-const getCurrentPosition = () => {
-  if (!navigator.geolocation) {
-    ElMessage.error('浏览器不支持地理位置获取')
-    return
-  }
-  
-  const options = {
-    enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 60000
-  }
-  
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      updateLocationFromPosition(position)
-      ElMessage.success('位置更新成功')
-    },
-    (error) => {
-      console.error('获取位置失败:', error)
-      ElMessage.warning('无法获取当前位置，使用默认位置')
-    },
-    options
-  )
-}
-
-// 开始监听位置变化
-const startWatchingPosition = () => {
-  if (!navigator.geolocation) {
-    return
-  }
-  
-  const options = {
-    enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 30000
-  }
-  
-  watchId = navigator.geolocation.watchPosition(
-    (position) => {
-      updateLocationFromPosition(position)
-    },
-    (error) => {
-      console.error('位置监听失败:', error)
-    },
-    options
-  )
-}
-
-// 停止监听位置变化
-const stopWatchingPosition = () => {
-  if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId)
-    watchId = null
-  }
-}
-
-// 从位置对象更新当前位置
-const updateLocationFromPosition = async (position) => {
-  currentLocation.value = {
-    latitude: position.coords.latitude,
-    longitude: position.coords.longitude,
-    altitude: position.coords.altitude || 0,
-    accuracy: position.coords.accuracy || 0,
-    speed: position.coords.speed || 0,
-    bearing: position.coords.heading || 0,
-    timestamp: position.timestamp
-  }
-  
-  // 获取位置名称
-  await getLocationName(position.coords.latitude, position.coords.longitude)
-}
-
-// 获取信号强度文本
-const getSignalText = (bars) => {
-  const signalMap = {
-    1: '很弱',
-    2: '较弱',
-    3: '一般',
-    4: '良好',
-    5: '优秀'
-  }
-  return signalMap[bars] || '无信号'
-}
-
-// 获取方向文本
-const getDirection = (bearing) => {
-  const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北']
-  const index = Math.round(bearing / 45) % 8
-  return directions[index]
-}
-
-// 格式化时间
-const formatTime = (timestamp) => {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
-
-// 获取地图模式文本
-const getMapModeText = (mode) => {
-  const modeMap = {
-    current: '当前位置',
-    area: '区域分析'
-  }
-  return modeMap[mode] || '未知模式'
-}
-
-
-
-// 居中到当前位置
-const centerToCurrentLocation = () => {
-  getCurrentPosition()
-}
-
-// 刷新位置
-const refreshLocation = () => {
-  getCurrentPosition()
-  loadGPSData()
-}
-
-// 加载轨迹历史
-const loadTrackHistory = () => {
-  console.log('加载轨迹历史:', trackDateRange.value)
-}
-
-
-
-// 加载GPS数据
 // 加载GPS数据
 const loadGPSData = async () => {
   try {
     const data = await getGPSData()
     console.log('从后端获取的GPS数据:', data)
     
-    // 如果后端有有效的GPS数据
     if (data && data.current && data.current.latitude && data.current.longitude) {
+      const newLat = data.current.latitude
+      const newLng = data.current.longitude
+      
       currentLocation.value = {
-        latitude: data.current.latitude,
-        longitude: data.current.longitude,
+        latitude: newLat,
+        longitude: newLng,
         altitude: data.current.altitude || 0,
         accuracy: data.current.accuracy || 0,
         speed: data.current.speed || 0,
@@ -373,16 +211,15 @@ const loadGPSData = async () => {
         timestamp: data.current.timestamp || Date.now()
       }
       
+      // 更新地图位置
+      updateMapLocation(newLat, newLng)
+      
       // 获取位置名称
-      await getLocationName(data.current.latitude, data.current.longitude)
-      
-      // 停止浏览器位置监听，使用后端数据
-      stopWatchingPosition()
+      await getLocationName(newLat, newLng)
     } else {
-      // 后端无GPS数据（车辆静止或设备离线）
-      console.log('后端GPS数据为空 - 车辆可能处于静止状态')
+      console.log('后端GPS数据为空')
+      locationName.value = '车辆静止 - 无GPS信号'
       
-      // 重置位置数据
       currentLocation.value = {
         latitude: null,
         longitude: null,
@@ -392,24 +229,6 @@ const loadGPSData = async () => {
         bearing: 0,
         timestamp: Date.now()
       }
-      
-      // 设置状态提示
-      locationName.value = '车辆静止 - 无GPS信号'
-      
-      // 停止浏览器位置监听
-      stopWatchingPosition()
-    }
-    
-    // 处理其他数据
-    if (data && data.status) {
-      gpsStatus.value = data.status
-    } else {
-      // 设置默认GPS状态
-      gpsStatus.value = {
-        signal: 'poor',
-        signalBars: 0,
-        satelliteCount: 0
-      }
     }
     
     if (data && data.distance) {
@@ -417,30 +236,50 @@ const loadGPSData = async () => {
     }
   } catch (error) {
     console.error('加载GPS数据失败:', error)
-    
-    // 网络错误时的处理
-    currentLocation.value = {
-      latitude: null,
-      longitude: null,
-      altitude: 0,
-      accuracy: 0,
-      speed: 0,
-      bearing: 0,
-      timestamp: Date.now()
-    }
-    
     locationName.value = '网络连接失败'
     ElMessage.error('获取GPS数据失败，请检查网络连接')
   }
 }
 
-// 组件挂载时 - 只依赖后端数据
-onMounted(() => {
-  // 不使用浏览器地理位置，只从后端获取
-  // getCurrentPosition() // 注释掉
-  // startWatchingPosition() // 注释掉
+// 居中到当前位置
+const centerToCurrentLocation = () => {
+  if (currentLocation.value.latitude && currentLocation.value.longitude) {
+    updateMapLocation(currentLocation.value.latitude, currentLocation.value.longitude)
+  } else {
+    loadGPSData()
+  }
+}
+
+// 刷新位置
+const refreshLocation = () => {
+  loadGPSData()
+}
+
+// 格式化时间
+const formatTime = (timestamp) => {
+  const date = new Date(timestamp)
+  return date.toLocaleString('zh-CN')
+}
+
+// 监听位置变化
+watch(
+  () => [currentLocation.value.latitude, currentLocation.value.longitude],
+  ([newLat, newLng]) => {
+    if (newLat && newLng && baiduMap) {
+      updateMapLocation(newLat, newLng)
+    }
+  }
+)
+
+// 组件挂载
+onMounted(async () => {
+  // 等待DOM渲染完成
+  await nextTick()
   
-  // 加载后端GPS数据
+  // 初始化百度地图
+  initBaiduMap()
+  
+  // 加载GPS数据
   loadGPSData()
   
   // 每30秒更新一次数据
@@ -448,16 +287,27 @@ onMounted(() => {
     loadGPSData()
   }, 30000)
 })
+
+// 组件卸载
+onUnmounted(() => {
+  if (updateTimer) {
+    clearInterval(updateTimer)
+  }
+  
+  // 清理地图资源
+  if (baiduMap) {
+    baiduMap = null
+  }
+})
 </script>
 
 <style scoped>
-/* GPS概览 */
+/* GPS概览样式 */
 .gps-monitoring {
   max-width: 1200px;
   margin: 0 auto;
+  padding: 20px;
 }
-
-
 
 .gps-overview {
   display: grid;
@@ -492,8 +342,7 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.accuracy,
-.update-time {
+.accuracy {
   font-size: 12px;
   color: #909399;
   background: #f5f7fa;
@@ -501,104 +350,13 @@ onMounted(() => {
   border-radius: 4px;
 }
 
-.gps-status {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.gps-status.excellent {
-  background: #67c23a;
-  box-shadow: 0 0 6px rgba(103, 194, 58, 0.5);
-}
-
-.gps-status.good {
-  background: #409eff;
-  box-shadow: 0 0 6px rgba(64, 158, 255, 0.5);
-}
-
-.gps-status.fair {
-  background: #e6a23c;
-  box-shadow: 0 0 6px rgba(230, 162, 60, 0.5);
-}
-
-.gps-status.poor {
-  background: #f56c6c;
-  box-shadow: 0 0 6px rgba(245, 108, 108, 0.5);
-}
-
-.status-info {
+.coordinate-info {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.signal-strength {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.signal-label {
-  font-size: 14px;
-  color: #606266;
-  min-width: 70px;
-}
-
-.signal-bars {
-  display: flex;
-  align-items: end;
-  gap: 2px;
-}
-
-.signal-bar {
-  width: 4px;
-  background: #e4e7ed;
-  border-radius: 2px;
-}
-
-.signal-bar:nth-child(1) { height: 8px; }
-.signal-bar:nth-child(2) { height: 12px; }
-.signal-bar:nth-child(3) { height: 16px; }
-.signal-bar:nth-child(4) { height: 20px; }
-.signal-bar:nth-child(5) { height: 24px; }
-
-.signal-bar.active {
-  background: #67c23a;
-}
-
-.signal-text {
-  font-size: 12px;
-  color: #909399;
-  margin-left: 8px;
-}
-
-.satellite-count {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.satellite-label {
-  font-size: 14px;
-  color: #606266;
-}
-
-.satellite-value {
-  font-size: 14px;
-  color: #303133;
-  font-weight: 500;
-}
-
-.coordinate-info,
-.movement-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.coordinate-item,
-.movement-item {
+.coordinate-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -606,33 +364,27 @@ onMounted(() => {
   border-bottom: 1px solid #f0f0f0;
 }
 
-.coordinate-item:last-child,
-.movement-item:last-child {
+.coordinate-item:last-child {
   border-bottom: none;
 }
 
-.coord-label,
-.movement-label {
+.coord-label {
   font-size: 14px;
   color: #909399;
 }
 
-.coord-value,
-.movement-value {
+.coord-value {
   font-size: 14px;
   color: #303133;
   font-weight: 500;
 }
 
-
-
-/* 地图显示 */
+/* 地图样式 */
 .map-section {
   background: white;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  margin-bottom: 30px;
 }
 
 .map-header {
@@ -651,324 +403,95 @@ onMounted(() => {
 
 .map-controls {
   display: flex;
-  align-items: center;
   gap: 12px;
-}
-
-.map-tools {
-  display: flex;
-  gap: 8px;
 }
 
 .map-container {
-  height: 400px;
-  border: 1px solid #ebeef5;
+  position: relative;
+  height: 500px;
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #e4e7ed;
 }
 
-.map-display {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-.map-background {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 50%, #e0f0e0 100%);
-  position: relative;
-  overflow: hidden;
-}
-
-/* 道路网格 */
-.road-network {
-  position: absolute;
-  top: 0;
-  left: 0;
+.baidu-map {
   width: 100%;
   height: 100%;
 }
 
-.road {
+.map-info-overlay {
   position: absolute;
-  background: #ffffff;
-  border: 1px solid #d0d0d0;
-}
-
-.road.horizontal {
-  width: 100%;
-  height: 8px;
-}
-
-.road.vertical {
-  width: 8px;
-  height: 100%;
-}
-
-.road-1 {
-  top: 30%;
-  left: 0;
-}
-
-.road-2 {
-  top: 70%;
-  left: 0;
-}
-
-.road-3 {
-  top: 0;
-  left: 25%;
-}
-
-.road-4 {
-  top: 0;
-  left: 75%;
-}
-
-/* 区域块 */
-.area-block {
-  position: absolute;
-  background: rgba(180, 220, 180, 0.3);
-  border: 2px dashed rgba(100, 150, 100, 0.5);
-  border-radius: 4px;
-}
-
-.area-1 {
-  top: 10%;
-  left: 10%;
-  width: 30%;
-  height: 15%;
-}
-
-.area-2 {
-  top: 10%;
-  right: 10%;
-  width: 25%;
-  height: 20%;
-}
-
-.area-3 {
-  bottom: 20%;
-  left: 15%;
-  width: 35%;
-  height: 25%;
-}
-
-.area-4 {
-  bottom: 10%;
-  right: 15%;
-  width: 20%;
-  height: 15%;
-}
-
-/* 位置标记 */
-.location-marker {
-  position: absolute;
-  top: 45%;
-  left: 45%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-}
-
-.marker-pin {
-  width: 40px;
-  height: 40px;
-  background: #409eff;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
-  animation: pulse 2s infinite;
-}
-
-.marker-icon {
-  color: white;
-  font-size: 20px;
-  transform: rotate(45deg);
-}
-
-.marker-label {
-  position: absolute;
-  top: 45px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  white-space: nowrap;
-  border: 1px solid #e0e0e0;
-}
-
-.label-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 2px;
-}
-
-.label-subtext {
-  font-size: 12px;
-  color: #909399;
-}
-
-/* 坐标信息 */
-.map-coordinates {
-  position: absolute;
-  bottom: 15px;
-  left: 15px;
+  top: 20px;
+  left: 20px;
   background: rgba(255, 255, 255, 0.95);
-  padding: 12px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e0e0e0;
-}
-
-.coord-display {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 4px;
-}
-
-.accuracy-display {
-  font-size: 12px;
-  color: #909399;
-}
-
-/* 动画效果 */
-@keyframes pulse {
-  0% {
-    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
-  }
-  50% {
-    box-shadow: 0 4px 20px rgba(64, 158, 255, 0.6), 0 0 0 10px rgba(64, 158, 255, 0.1);
-  }
-  100% {
-    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
-  }
-}
-
-/* 历史轨迹 */
-.history-section {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.history-header h2 {
-  font-size: 18px;
-  color: #303133;
-  margin: 0;
-  font-weight: 600;
-}
-
-.history-content {
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 30px;
-}
-
-.history-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.stat-item {
   padding: 16px;
-  background: #f8f9fa;
   border-radius: 8px;
-  text-align: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  max-width: 300px;
 }
 
-.stat-value {
-  font-size: 18px;
-  font-weight: bold;
-  color: #303133;
-  display: block;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.history-timeline h3 {
+.location-name {
   font-size: 16px;
-  color: #303133;
-  margin: 0 0 16px 0;
   font-weight: 600;
-}
-
-.timeline-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.timeline-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 6px;
-  position: relative;
-}
-
-.timeline-time {
-  font-size: 12px;
-  color: #909399;
-  min-width: 60px;
-}
-
-.timeline-location {
-  flex: 1;
+  color: #303133;
+  margin-bottom: 8px;
 }
 
 .location-coords {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 4px;
+}
+
+.location-time {
   font-size: 12px;
   color: #909399;
-  font-family: monospace;
 }
 
-.location-speed {
-  font-size: 12px;
-  color: #606266;
-  margin-top: 2px;
-}
-
-.timeline-marker {
-  width: 8px;
-  height: 8px;
-  background: #409eff;
-  border-radius: 50%;
+.no-data-overlay {
   position: absolute;
-  right: 12px;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(248, 249, 250, 0.8);
+  backdrop-filter: blur(5px);
 }
 
+.no-data-content {
+  text-align: center;
+  padding: 40px;
+}
 
+.no-data-icon {
+  font-size: 48px;
+  color: #c0c4cc;
+  margin-bottom: 16px;
+}
+
+.no-data-text {
+  font-size: 16px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.no-data-desc {
+  font-size: 14px;
+  color: #909399;
+}
 
 /* 响应式设计 */
 @media (max-width: 768px) {
   .gps-overview {
     grid-template-columns: 1fr;
+  }
+  
+  .map-container {
+    height: 400px;
   }
   
   .map-header {
@@ -977,29 +500,8 @@ onMounted(() => {
     align-items: stretch;
   }
   
-  .history-content {
-    grid-template-columns: 1fr;
-  }
-  
-  .history-stats {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 480px) {
-  .map-container {
-    height: 300px;
-  }
-  
   .map-controls {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .timeline-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    justify-content: center;
   }
 }
 </style>
