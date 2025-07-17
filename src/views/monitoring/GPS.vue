@@ -147,14 +147,14 @@ const gpsStatus = ref({
   satelliteCount: 12
 })
 
-// 当前位置
+// 当前位置 - 删除硬编码坐标，改为空值或默认值
 const currentLocation = ref({
-  latitude: 30.2741,
-  longitude: 120.1551,
-  altitude: 43.5,
-  accuracy: 3.2,
-  speed: 2.1,
-  bearing: 45,
+  latitude: null,
+  longitude: null,
+  altitude: 0,
+  accuracy: 0,
+  speed: 0,
+  bearing: 0,
   timestamp: Date.now()
 })
 
@@ -178,22 +178,7 @@ const trackStats = ref({
   maxSpeed: '5.8'
 })
 
-const trackHistory = ref([
-  {
-    id: 1,
-    timestamp: Date.now() - 3600000,
-    latitude: 30.2741,
-    longitude: 120.1551,
-    speed: 2.1
-  },
-  {
-    id: 2,
-    timestamp: Date.now() - 7200000,
-    latitude: 30.2711,
-    longitude: 120.1521,
-    speed: 1.8
-  }
-])
+const trackHistory = ref([])
 
 // 定时器
 let updateTimer = null
@@ -370,48 +355,98 @@ const loadTrackHistory = () => {
 
 
 // 加载GPS数据
+// 加载GPS数据
 const loadGPSData = async () => {
   try {
     const data = await getGPSData()
-    if (data && data.current) {
-      currentLocation.value = data.current
+    console.log('从后端获取的GPS数据:', data)
+    
+    // 如果后端有有效的GPS数据
+    if (data && data.current && data.current.latitude && data.current.longitude) {
+      currentLocation.value = {
+        latitude: data.current.latitude,
+        longitude: data.current.longitude,
+        altitude: data.current.altitude || 0,
+        accuracy: data.current.accuracy || 0,
+        speed: data.current.speed || 0,
+        bearing: data.current.bearing || 0,
+        timestamp: data.current.timestamp || Date.now()
+      }
+      
+      // 获取位置名称
+      await getLocationName(data.current.latitude, data.current.longitude)
+      
+      // 停止浏览器位置监听，使用后端数据
+      stopWatchingPosition()
+    } else {
+      // 后端无GPS数据（车辆静止或设备离线）
+      console.log('后端GPS数据为空 - 车辆可能处于静止状态')
+      
+      // 重置位置数据
+      currentLocation.value = {
+        latitude: null,
+        longitude: null,
+        altitude: 0,
+        accuracy: 0,
+        speed: 0,
+        bearing: 0,
+        timestamp: Date.now()
+      }
+      
+      // 设置状态提示
+      locationName.value = '车辆静止 - 无GPS信号'
+      
+      // 停止浏览器位置监听
+      stopWatchingPosition()
     }
+    
+    // 处理其他数据
     if (data && data.status) {
       gpsStatus.value = data.status
+    } else {
+      // 设置默认GPS状态
+      gpsStatus.value = {
+        signal: 'poor',
+        signalBars: 0,
+        satelliteCount: 0
+      }
     }
+    
     if (data && data.distance) {
       todayDistance.value = data.distance
     }
   } catch (error) {
     console.error('加载GPS数据失败:', error)
+    
+    // 网络错误时的处理
+    currentLocation.value = {
+      latitude: null,
+      longitude: null,
+      altitude: 0,
+      accuracy: 0,
+      speed: 0,
+      bearing: 0,
+      timestamp: Date.now()
+    }
+    
+    locationName.value = '网络连接失败'
+    ElMessage.error('获取GPS数据失败，请检查网络连接')
   }
 }
 
-// 组件挂载时
+// 组件挂载时 - 只依赖后端数据
 onMounted(() => {
-  // 获取当前位置
-  getCurrentPosition()
+  // 不使用浏览器地理位置，只从后端获取
+  // getCurrentPosition() // 注释掉
+  // startWatchingPosition() // 注释掉
   
-  // 开始监听位置变化
-  startWatchingPosition()
-  
-  // 加载GPS数据
+  // 加载后端GPS数据
   loadGPSData()
   
   // 每30秒更新一次数据
   updateTimer = setInterval(() => {
     loadGPSData()
-  }, 30000) // 30000毫秒 = 30秒
-})
-
-// 组件卸载时
-onUnmounted(() => {
-  if (updateTimer) {
-    clearInterval(updateTimer)
-  }
-  
-  // 停止位置监听
-  stopWatchingPosition()
+  }, 30000)
 })
 </script>
 
