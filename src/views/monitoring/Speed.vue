@@ -35,7 +35,7 @@
             <div class="stat-label">总距离 (km)</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">{{ formatDuration(totalTime) }}</div>
+            <div class="stat-value">{{ exerciseTime }}</div>
             <div class="stat-label">运动时长</div>
           </div>
         </div>
@@ -87,7 +87,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { TrendCharts } from '@element-plus/icons-vue'
-import { getSpeedData, getCurrentSpeedData, getTodayMaxSpeed } from '@/api/monitoring'
+import { getSpeedData, getCurrentSpeedData, getTodayMaxSpeed, getTotalExerciseTime } from '@/api/monitoring'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
@@ -121,11 +121,15 @@ const todayMaxSpeed = ref(0)
 const todayMaxSpeedDate = ref('')
 
 // 速度统计
+// 速度统计
 const maxSpeed = ref(8.5)
 const avgSpeed = ref(3.2)
 const totalDistance = ref(12.6)
 const totalTime = ref(14400) // 秒
 const lastUpdate = ref(Date.now())
+
+// 运动时长数据
+const exerciseTime = ref('0小时0分钟0秒')
 
 // 日期范围选择
 const dateRange = ref([
@@ -444,7 +448,8 @@ const loadSpeedData = async () => {
 // 修改定时器设置为每1秒刷新
 onMounted(() => {
   loadSpeedData()
-  loadTodayMaxSpeed() // 添加这行
+  loadTodayMaxSpeed()
+  loadExerciseTime() // 添加这行
   
   // 每1秒自动刷新当前速度数据
   updateTimer = setInterval(async () => {
@@ -526,6 +531,33 @@ const loadTodayMaxSpeed = async () => {
   } catch (error) {
     console.error('加载今日最高速度数据失败:', error)
     ElMessage.error('加载今日最高速度数据失败: ' + error.message)
+  }
+}
+// 加载运动时长数据
+const loadExerciseTime = async () => {
+  try {
+    console.log('开始获取运动时长数据')
+    const result = await getTotalExerciseTime()
+    
+    console.log('getTotalExerciseTime 完整返回结果:', result)
+    console.log('result.totalTime 的值:', result.totalTime)
+    console.log('result.totalTime 的类型:', typeof result.totalTime)
+    
+    if (result.success) {
+      console.log('设置前 exerciseTime.value:', exerciseTime.value)
+      exerciseTime.value = result.totalTime
+      console.log('设置后 exerciseTime.value:', exerciseTime.value)
+      
+      console.log('运动时长数据加载成功:', {
+        时长: exerciseTime.value
+      })
+    } else {
+      console.error('获取运动时长失败:', result.error)
+      ElMessage.error('获取运动时长失败: ' + (result.error || '未知错误'))
+    }
+  } catch (error) {
+    console.error('加载运动时长数据失败:', error)
+    ElMessage.error('加载运动时长数据失败: ' + error.message)
   }
 }
 </script>

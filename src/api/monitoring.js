@@ -691,8 +691,8 @@ export const getCurrentSpeedData = async () => {
     let timestamp = Date.now()
     if (speedData.time_str) {
       // 如果有time_str，构造今天的完整时间
-      const today = new Date().toISOString().split('T')[0]
-      const fullTimeStr = `${today}T${speedData.time_str}`
+      const now = new Date().toISOString().split('T')[0]
+      const fullTimeStr = `${now}T${speedData.time_str}`
       timestamp = new Date(fullTimeStr).getTime()
     } else if (speedData.timestamp || speedData.time) {
       timestamp = new Date(speedData.timestamp || speedData.time).getTime()
@@ -758,6 +758,49 @@ export const getTodayMaxSpeed = async () => {
       success: false,
       maxSpeed: 0,
       error: error.message || '获取当天最大速度失败'
+    }
+  }
+}
+
+// 获取运动时长
+export const getTotalExerciseTime = async () => {
+  try {
+    const response = await request.get('/speed/total')
+    console.log('后端返回的运动时长数据:', response)
+    console.log('response.data:', response.data)
+    console.log('response 的类型:', typeof response)
+
+    // 检查响应数据
+    if (!response) {
+      console.error('后端返回运动时长数据为空')
+      throw new Error('后端返回运动时长数据为空')
+    }
+
+    // 尝试多种可能的数据结构
+    let totalTime
+    if (response.data !== undefined) {
+      totalTime = response.data
+    } else if (typeof response === 'string') {
+      totalTime = response
+    } else {
+      totalTime = '0小时0分钟0秒'
+    }
+    
+    console.log('最终获取的运动时长:', totalTime)
+
+    // 返回标准化的数据格式
+    return {
+      success: true,
+      totalTime: totalTime,
+      date: new Date().toLocaleDateString('zh-CN'),
+      time: new Date().toLocaleTimeString('zh-CN')
+    }
+  } catch (error) {
+    console.error('获取运动时长失败:', error)
+    return {
+      success: false,
+      totalTime: '0小时0分钟0秒',
+      error: error.message || '获取运动时长失败'
     }
   }
 }
