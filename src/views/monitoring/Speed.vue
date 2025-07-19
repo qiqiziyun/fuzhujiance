@@ -87,7 +87,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { TrendCharts } from '@element-plus/icons-vue'
-import { getSpeedData, getCurrentSpeedData } from '@/api/monitoring'
+import { getSpeedData, getCurrentSpeedData, getTodayMaxSpeed } from '@/api/monitoring'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
@@ -115,6 +115,10 @@ use([
 const currentSpeed = ref(2.3)
 // 添加缺少的变量
 const lastUpdateTime = ref('')
+
+// 今日最高速度数据
+const todayMaxSpeed = ref(0)
+const todayMaxSpeedDate = ref('')
 
 // 速度统计
 const maxSpeed = ref(8.5)
@@ -406,11 +410,11 @@ const loadSpeedData = async () => {
       console.log('直接设置speedHistory:', speedHistory.value.length, '个数据点')
       console.log('前3个数据点:', speedHistory.value.slice(0, 3))
       
-      // 简单统计（可选）
+      // 简单统计（但不覆盖今日最高速度）
       if (speedHistory.value.length > 0) {
         const speeds = speedHistory.value.map(item => item.speed)
         currentSpeed.value = speeds[speeds.length - 1] || 0
-        maxSpeed.value = Math.max(...speeds)
+        // 移除这行：maxSpeed.value = Math.max(...speeds)
         avgSpeed.value = speeds.reduce((a, b) => a + b, 0) / speeds.length
       }
       
@@ -440,6 +444,8 @@ const loadSpeedData = async () => {
 // 修改定时器设置为每1秒刷新
 onMounted(() => {
   loadSpeedData()
+  loadTodayMaxSpeed() // 添加这行
+  
   // 每1秒自动刷新当前速度数据
   updateTimer = setInterval(async () => {
     try {
@@ -447,6 +453,12 @@ onMounted(() => {
       const currentData = await getCurrentSpeedData()
       currentSpeed.value = currentData.current
       lastUpdateTime.value = new Date(currentData.timestamp).toLocaleString('zh-CN')
+      
+      // 每分钟刷新一次今日最高速度
+      const now = new Date()
+      if (now.getSeconds() === 0) {
+        loadTodayMaxSpeed()
+      }
     } catch (error) {
       console.error('刷新当前速度失败:', error)
     }
@@ -486,6 +498,36 @@ onUnmounted(() => {
     updateTimer = null
   }
 })
+
+// 加载今日最高速度数据
+const loadTodayMaxSpeed = async () => {
+  try {
+    console.log('开始获取今日最高速度数据')
+    const result = await getTodayMaxSpeed()
+    
+    console.log('getTodayMaxSpeed返回的完整结果:', result)
+    
+    if (result.success) {
+      // 直接使用返回的值，不使用 || 0 逻辑
+      todayMaxSpeed.value = result.maxSpeed
+      todayMaxSpeedDate.value = result.date || ''
+      
+      // 更新显示的最高速度
+      maxSpeed.value = result.maxSpeed
+      
+      console.log('今日最高速度数据加载成功:', {
+        速度: todayMaxSpeed.value,
+        日期: todayMaxSpeedDate.value
+      })
+    } else {
+      console.error('获取今日最高速度失败:', result.error)
+      ElMessage.error('获取今日最高速度失败: ' + (result.error || '未知错误'))
+    }
+  } catch (error) {
+    console.error('加载今日最高速度数据失败:', error)
+    ElMessage.error('加载今日最高速度数据失败: ' + error.message)
+  }
+}
 </script>
 
 <style scoped>

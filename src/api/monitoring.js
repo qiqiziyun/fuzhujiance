@@ -721,6 +721,47 @@ export const getCurrentSpeedData = async () => {
   }
 }
 
+// 获取当天最大速度
+// 获取当天最大速度
+export const getTodayMaxSpeed = async () => {
+  try {
+    const response = await request.get('/speed/max')
+    console.log('后端返回的当天最大速度数据:', response)
+
+    // 检查响应数据
+    if (!response) {
+      console.error('后端返回当天最大速度数据为空')
+      throw new Error('后端返回当天最大速度数据为空')
+    }
+
+    // 检查响应数据
+    if (!response) {
+      console.error('后端返回当天最大速度数据为空')
+      throw new Error('后端返回当天最大速度数据为空')
+    }
+
+    // 如果后端直接返回数字，就直接使用
+    const maxSpeed = typeof response === 'number' ? response : response.data || response
+    
+    console.log('直接使用的当天最大速度:', maxSpeed)
+
+    // 返回标准化的数据格式
+    return {
+      success: true,
+      maxSpeed: maxSpeed,
+      date: new Date().toLocaleDateString('zh-CN'),
+      time: new Date().toLocaleTimeString('zh-CN')
+    }
+  } catch (error) {
+    console.error('获取当天最大速度失败:', error)
+    return {
+      success: false,
+      maxSpeed: 0,
+      error: error.message || '获取当天最大速度失败'
+    }
+  }
+}
+
 
 
 
