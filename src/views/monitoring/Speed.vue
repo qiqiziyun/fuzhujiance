@@ -18,7 +18,7 @@
       
       <div class="speed-card stats">
         <div class="card-header">
-          <h3>速度统计</h3>
+          <h3>今日速度统计</h3>
           <el-icon class="card-icon"><TrendCharts /></el-icon>
         </div>
         <div class="stats-grid">
